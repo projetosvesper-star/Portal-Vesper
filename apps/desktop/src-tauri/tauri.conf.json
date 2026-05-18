@@ -1,0 +1,33 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Portal Vesper",
+  "version": "0.1.0",
+  "identifier": "br.com.vesper.portal",
+  "build": {
+    "beforeDevCommand": "npm run dev --workspace=apps/web",
+    "beforeBuildCommand": "npm run build --workspace=apps/web",
+    "devUrl": "http://127.0.0.1:5174",
+    "frontendDist": "../../web/dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Portal Vesper",
+        "width": 1360,
+        "height": 860,
+        "minWidth": 1120,
+        "minHeight": 720,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["msi", "nsis"],
+    "publisher": "Vesper"
+  }
+}

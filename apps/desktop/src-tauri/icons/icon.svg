@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="Portal Vesper">
+  <rect width="256" height="256" rx="48" fill="#080f1f"/>
+  <path d="M64 54h38l28 96 27-96h36l-43 148h-42L64 54Z" fill="#38d3ee"/>
+  <path d="M88 54h112v28H96l-8-28Z" fill="#2dd4bf" opacity=".75"/>
+</svg>
