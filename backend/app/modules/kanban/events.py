@@ -1,13 +1,13 @@
-"""Event definitions for Kanban Engine."""
+"""Eventos do Kanban Engine (Redis Stream + Pub/Sub / WebSocket)."""
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
-from uuid import UUID
 
-from app.core.redis import add_stream_event, publish_message
+from app.core.redis import STREAM_MODULE_EVENTS, add_stream_event, publish_module, publish_user
 
+MODULE_KEY = "kanban"
 
 # Event names
 KANBAN_BOARD_CREATED = "kanban.board.created"
@@ -32,34 +32,36 @@ KANBAN_ATTACHMENT_CREATED = "kanban.attachment.created"
 KANBAN_ATTACHMENT_DELETED = "kanban.attachment.deleted"
 
 
-STREAM_KANBAN = "stream:kanban_events"
-WS_CHANNEL_KANBAN = "ws:module:kanban"
+def build_event(event_type: str, payload: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "type": event_type,
+        "payload": payload,
+        "timestamp": datetime.now(UTC).isoformat(),
+    }
 
 
 async def publish_kanban_event(
     event_type: str,
     payload: dict[str, Any],
-    user_id: UUID | None = None,
+    publish_to_user_id: str | None = None,
 ) -> None:
-    """Publish a Kanban event to Redis Stream and WebSocket channel."""
-    event_data = {
-        "type": event_type,
-        "payload": payload,
-        "timestamp": datetime.utcnow().isoformat(),
-    }
-    
+    """Publica no stream padrao de eventos do portal e nos canais WebSocket do Kanban."""
+    event = build_event(event_type, payload)
     try:
-        # Add to Redis Stream
-        await add_stream_event(STREAM_KANBAN, event_data)
-        
-        # Publish to WebSocket channel
-        await publish_message(WS_CHANNEL_KANBAN, event_data)
-        
-        # Publish to user-specific channel if user_id is provided
-        if user_id:
-            await publish_message(f"ws:user:{user_id}", event_data)
+        await add_stream_event(
+            STREAM_MODULE_EVENTS,
+            {
+                "module_key": MODULE_KEY,
+                "type": event["type"],
+                "payload": event["payload"],
+                "timestamp": event["timestamp"],
+            },
+        )
+        await publish_module(MODULE_KEY, event)
+        if publish_to_user_id:
+            await publish_user(publish_to_user_id, event)
     except Exception:
-        # Log error but don't fail the operation
+        # Eventos nunca devem quebrar a operacao de negocio.
         pass
 
 

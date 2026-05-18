@@ -16,6 +16,7 @@ Eventos base:
 - `admin.permission.updated`
 - `admin.module.updated`
 - `file.uploaded`
+- `kanban.*` (Kanban Engine)
 
 Formato recomendado:
 
@@ -36,6 +37,39 @@ Redis Pub/Sub e usado para broadcast rapido entre instancias.
 - `ws:module:{module_key}`
 
 O servidor escuta broadcast geral, canais por usuario e canais por modulo. Mensagens por modulo ainda sao redistribuidas como broadcast na base atual; modulos futuros podem evoluir para inscricao granular.
+
+## Eventos Kanban Engine
+
+Canal por modulo:
+
+- `ws:module:kanban`
+
+Stream:
+
+- `stream:module_events` (campo `module_key=kanban`)
+
+Eventos publicados:
+
+- `kanban.board.created`
+- `kanban.board.updated`
+- `kanban.board.archived`
+- `kanban.column.created`
+- `kanban.column.updated`
+- `kanban.column.reordered`
+- `kanban.card.created`
+- `kanban.card.updated`
+- `kanban.card.moved`
+- `kanban.card.archived`
+- `kanban.card.restored`
+- `kanban.card.deleted`
+- `kanban.card.assigned`
+- `kanban.comment.created`
+- `kanban.comment.updated`
+- `kanban.comment.deleted`
+- `kanban.checklist.created`
+- `kanban.checklist.updated`
+- `kanban.attachment.created`
+- `kanban.attachment.deleted`
 
 ## Heartbeat
 

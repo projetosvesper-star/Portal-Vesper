@@ -44,7 +44,7 @@ class BoardRead(BaseModel):
     created_at: datetime
     updated_at: datetime
     archived_at: datetime | None
-    metadata: dict[str, Any]
+    metadata: dict[str, Any] = Field(default_factory=dict, validation_alias="metadata_json", serialization_alias="metadata")
 
     class Config:
         from_attributes = True
@@ -85,14 +85,19 @@ class ColumnRead(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
-    metadata: dict[str, Any]
+    metadata: dict[str, Any] = Field(default_factory=dict, validation_alias="metadata_json", serialization_alias="metadata")
 
     class Config:
         from_attributes = True
 
 
+class ColumnOrderItem(BaseModel):
+    column_id: UUID
+    order_index: int = Field(..., ge=0)
+
+
 class ColumnReorderRequest(BaseModel):
-    column_orders: list[tuple[UUID, int]] = Field(..., description="List of (column_id, new_order_index)")
+    columns: list[ColumnOrderItem]
 
 
 class CardTypeCreate(BaseModel):
@@ -122,7 +127,7 @@ class CardTypeRead(BaseModel):
     description: str | None
     color: str | None
     icon: str | None
-    schema: dict[str, Any]
+    schema: dict[str, Any] = Field(default_factory=dict, validation_alias="schema_json", serialization_alias="schema")
     is_active: bool
     created_at: datetime
     updated_at: datetime
@@ -181,7 +186,7 @@ class CardRead(BaseModel):
     deleted_at: datetime | None
     created_at: datetime
     updated_at: datetime
-    metadata: dict[str, Any]
+    metadata: dict[str, Any] = Field(default_factory=dict, validation_alias="metadata_json", serialization_alias="metadata")
 
     class Config:
         from_attributes = True
@@ -280,9 +285,9 @@ class ActivityLogRead(BaseModel):
     card_id: UUID | None
     user_id: UUID | None
     action: str
-    old_value: dict[str, Any] | None
-    new_value: dict[str, Any] | None
-    metadata: dict[str, Any]
+    old_value: dict[str, Any] | None = Field(default=None, validation_alias="old_value_json", serialization_alias="old_value")
+    new_value: dict[str, Any] | None = Field(default=None, validation_alias="new_value_json", serialization_alias="new_value")
+    metadata: dict[str, Any] = Field(default_factory=dict, validation_alias="metadata_json", serialization_alias="metadata")
     created_at: datetime
 
     class Config:

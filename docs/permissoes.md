@@ -27,3 +27,17 @@ Rotas diretas no frontend tambem passam por uma protecao visual por modulo. Isso
 - Comercial: Propostas, Chat e Kanban limitado.
 - Compras: Compras, Chat e Kanban limitado.
 - Producao: Kanban, Chat e HelpDesk limitado.
+
+## Permissoes Kanban Engine
+
+As permissoes do Kanban Engine seguem o padrao `kanban.*` e sao granulares por recurso:
+
+- `kanban.view`
+- `kanban.board.*` (view/create/edit/delete/manage_permissions)
+- `kanban.column.*` (view/create/edit/delete/reorder)
+- `kanban.card.*` (view/create/edit/delete/archive/restore/move/reorder/assign/comment/attach/checklist)
+- `kanban.activity.view`
+- `kanban.audit.view`
+- `kanban.admin`
+
+Referencia completa (inclui descricao de cada chave): `backend/app/modules/kanban/permissions.py` e `docs/kanban-engine.md`.

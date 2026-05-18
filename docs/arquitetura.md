@@ -30,3 +30,9 @@ O backend e a fonte de verdade para permissoes, dados, validacoes e integracoes.
 ## Modulos futuros
 
 Cada modulo deve ter pasta propria no backend e no frontend, permissao `modulo.view`, rotas protegidas e registro em `portal_modules`.
+
+## Kanban Engine
+
+O Kanban Engine e um **motor unico e generico** de quadros/colunas/cards. Ele sera reutilizado por contextos diferentes (producao, projetos, operacional, helpdesk e quadros customizados) sem duplicar codigo nem criar campos industriais diretamente em `kanban_cards`.
+
+Detalhes: `docs/kanban-engine.md`.

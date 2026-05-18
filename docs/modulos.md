@@ -26,3 +26,15 @@ Campos principais:
 Modulos finais nao foram implementados nesta etapa de proposito.
 
 Antes de implementar o Kanban Engine, mantenha o primeiro modulo dentro deste padrao: router proprio, permissoes `kanban.*`, migrations separadas, testes de acesso e tela isolada em `apps/web/src/modules/kanban`.
+
+## Kanban Engine (primeiro modulo real)
+
+O **Kanban Engine** e o primeiro modulo com implementacao real no backend, projetado para ser **generico** e reutilizado no futuro por:
+
+- Kanban Producao;
+- Kanban Projetos;
+- Kanban Operacional;
+- HelpDesk (opcional);
+- Quadros personalizados.
+
+Documentacao completa: `docs/kanban-engine.md`.

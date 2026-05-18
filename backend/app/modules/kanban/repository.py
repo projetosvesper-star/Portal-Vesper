@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from uuid import UUID
 from typing import Any
 
@@ -21,6 +22,7 @@ from app.modules.kanban.models import (
     KanbanActivityLog,
     KanbanBoardPermission,
 )
+from app.models import File as StoredFile
 
 
 class KanbanRepository:
@@ -220,8 +222,7 @@ class KanbanRepository:
         return card
 
     async def soft_delete_card(self, card: KanbanCard) -> KanbanCard:
-        from datetime import datetime
-        card.deleted_at = datetime.now()
+        card.deleted_at = datetime.now(UTC)
         await self.session.flush()
         return card
 
@@ -303,8 +304,7 @@ class KanbanRepository:
         return comment
 
     async def soft_delete_comment(self, comment: KanbanComment) -> KanbanComment:
-        from datetime import datetime
-        comment.deleted_at = datetime.now()
+        comment.deleted_at = datetime.now(UTC)
         await self.session.flush()
         return comment
 
@@ -372,3 +372,7 @@ class KanbanRepository:
 
     async def delete_board_permission(self, permission: KanbanBoardPermission) -> None:
         await self.session.delete(permission)
+
+    # Files (attachments)
+    async def file_exists(self, file_id: UUID) -> bool:
+        return (await self.session.get(StoredFile, file_id)) is not None

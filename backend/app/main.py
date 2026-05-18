@@ -15,6 +15,7 @@ from app.core.websocket import websocket_endpoint, websocket_manager
 from app.modules.admin.router import router as admin_router
 from app.modules.auth.router import router as auth_router
 from app.modules.files.router import router as files_router
+from app.modules.kanban.router import router as kanban_router
 from app.modules.notifications.router import router as notifications_router
 from app.modules.portal.router import router as portal_router
 
@@ -99,4 +100,5 @@ app.include_router(portal_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
 app.include_router(notifications_router, prefix="/api")
 app.include_router(files_router, prefix="/api")
+app.include_router(kanban_router, prefix="/api")
 app.add_api_websocket_route("/ws", websocket_endpoint)

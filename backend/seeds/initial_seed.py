@@ -5,9 +5,12 @@ import asyncio
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
+from app.core.config import get_settings
 from app.core.database import AsyncSessionLocal
 from app.core.security import hash_password
 from app.models import ModulePermission, Permission, PortalModule, Role, User
+from app.modules.kanban.models import KanbanBoard, KanbanCard, KanbanCardType, KanbanColumn
+from app.modules.kanban.permissions import KANBAN_PERMISSION_DEFINITIONS
 
 MODULES = [
     {"key": "chat", "name": "Chat Interno", "description": "Comunicacao interna em tempo real.", "route": "/chat", "icon": "MessageCircle", "order_index": 10},
@@ -40,8 +43,6 @@ PERMISSIONS = [
     ("admin.view_as_user", "Visualizar como usuario", "admin"),
     ("chat.view", "Ver chat", "chat"),
     ("chat.send", "Enviar mensagens no chat", "chat"),
-    ("kanban.view", "Ver Kanban", "kanban"),
-    ("kanban.card.view", "Ver cartoes Kanban", "kanban"),
     ("propostas.view", "Ver propostas", "propostas"),
     ("propostas.create", "Criar propostas", "propostas"),
     ("compras.view", "Ver compras", "compras"),
@@ -56,20 +57,101 @@ PERMISSIONS = [
     ("automacoes_n8n.view", "Ver automacoes n8n", "automacoes_n8n"),
     ("automacoes_n8n.status.view", "Ver status n8n", "automacoes_n8n"),
     ("system.notifications.view", "Ver notificacoes", None),
-]
+] + KANBAN_PERMISSION_DEFINITIONS
 
 ROLE_PERMISSION_KEYS = {
     "administrador": [key for key, _, _ in PERMISSIONS],
     "gestor": [
-        "chat.view", "chat.send", "kanban.view", "kanban.card.view", "propostas.view",
-        "compras.view", "helpdesk.view", "helpdesk.ticket.view", "atalhos.view",
+        "chat.view",
+        "chat.send",
+        # Kanban (Gestor)
+        "kanban.view",
+        "kanban.board.view",
+        "kanban.board.create",
+        "kanban.board.edit",
+        "kanban.column.view",
+        "kanban.card.view",
+        "kanban.card.create",
+        "kanban.card.edit",
+        "kanban.card.move",
+        "kanban.card.comment",
+        "kanban.card.attach",
+        "kanban.card.checklist",
+        "kanban.activity.view",
+        # Outros modulos
+        "propostas.view",
+        "compras.view",
+        "helpdesk.view",
+        "helpdesk.ticket.view",
+        "atalhos.view",
         "system.notifications.view",
     ],
-    "usuario": ["chat.view", "chat.send", "atalhos.view", "helpdesk.view", "helpdesk.ticket.create", "system.notifications.view"],
-    "ti": ["chat.view", "chat.send", "helpdesk.view", "helpdesk.ticket.view", "controle_ti.view", "atalhos.view", "system.notifications.view"],
-    "comercial": ["chat.view", "chat.send", "propostas.view", "propostas.create", "kanban.view", "kanban.card.view", "atalhos.view", "system.notifications.view"],
-    "compras": ["chat.view", "chat.send", "compras.view", "compras.cotacoes.view", "kanban.view", "kanban.card.view", "atalhos.view", "system.notifications.view"],
-    "producao": ["chat.view", "chat.send", "kanban.view", "kanban.card.view", "helpdesk.view", "helpdesk.ticket.create", "system.notifications.view"],
+    "producao": [
+        "chat.view",
+        "chat.send",
+        "kanban.view",
+        "kanban.board.view",
+        "kanban.column.view",
+        "kanban.card.view",
+        "kanban.card.create",
+        "kanban.card.edit",
+        "kanban.card.move",
+        "kanban.card.comment",
+        "kanban.card.attach",
+        "kanban.card.checklist",
+        "kanban.activity.view",
+        "helpdesk.view",
+        "helpdesk.ticket.create",
+        "system.notifications.view",
+    ],
+    "comercial": [
+        "chat.view",
+        "chat.send",
+        "propostas.view",
+        "propostas.create",
+        "kanban.view",
+        "kanban.board.view",
+        "kanban.card.view",
+        "kanban.card.comment",
+        "atalhos.view",
+        "system.notifications.view",
+    ],
+    "compras": [
+        "chat.view",
+        "chat.send",
+        "compras.view",
+        "compras.cotacoes.view",
+        "kanban.view",
+        "kanban.board.view",
+        "kanban.card.view",
+        "kanban.card.comment",
+        "atalhos.view",
+        "system.notifications.view",
+    ],
+    "ti": [
+        "chat.view",
+        "chat.send",
+        "helpdesk.view",
+        "helpdesk.ticket.view",
+        "controle_ti.view",
+        "kanban.view",
+        "kanban.board.view",
+        "kanban.card.view",
+        "kanban.card.comment",
+        "atalhos.view",
+        "system.notifications.view",
+    ],
+    "usuario": [
+        "chat.view",
+        "chat.send",
+        "kanban.view",
+        "kanban.board.view",
+        "kanban.card.view",
+        "atalhos.view",
+        "helpdesk.view",
+        "helpdesk.ticket.create",
+        "system.notifications.view",
+    ],
 }
 
 ROLES = [
@@ -84,6 +166,7 @@ ROLES = [
 
 
 async def run() -> None:
+    settings = get_settings()
     async with AsyncSessionLocal() as session:
         module_by_key: dict[str, PortalModule] = {}
         for item in MODULES:
@@ -145,6 +228,79 @@ async def run() -> None:
             )
             session.add(admin)
         admin.roles = [role_by_key["administrador"]]
+
+        # Seed Kanban Engine (somente desenvolvimento)
+        if settings.is_development:
+            board = await session.scalar(select(KanbanBoard).where(KanbanBoard.key == "producao"))
+            if board is None:
+                board = KanbanBoard(
+                    key="producao",
+                    name="Producao",
+                    description="Quadro inicial de producao (Kanban Engine).",
+                    board_type="production",
+                    module_context="producao",
+                    is_active=True,
+                    is_archived=False,
+                    created_by=admin.id,
+                    metadata_json={},
+                )
+                session.add(board)
+                await session.flush()
+
+                columns = [
+                    ("Fila", 1),
+                    ("Em preparacao", 2),
+                    ("Em producao", 3),
+                    ("Revisao", 4),
+                    ("Concluido", 5),
+                ]
+                for name, order_index in columns:
+                    session.add(
+                        KanbanColumn(
+                            board_id=board.id,
+                            name=name,
+                            order_index=order_index,
+                            is_done=name == "Concluido",
+                            is_active=True,
+                            metadata_json={},
+                        )
+                    )
+                await session.flush()
+
+                card_type = KanbanCardType(
+                    board_id=board.id,
+                    key="op",
+                    name="Ordem de Producao",
+                    description="Tipo base para OP (ainda generico nesta etapa).",
+                    schema_json={},
+                    is_active=True,
+                )
+                session.add(card_type)
+                await session.flush()
+
+                # Cards de exemplo apenas em desenvolvimento
+                first_column = await session.scalar(
+                    select(KanbanColumn).where(KanbanColumn.board_id == board.id).order_by(KanbanColumn.order_index)
+                )
+                if first_column:
+                    for idx, code in enumerate(["OP-2026-0001", "OP-2026-0002", "OP-2026-0003"], start=1):
+                        session.add(
+                            KanbanCard(
+                                board_id=board.id,
+                                column_id=first_column.id,
+                                card_type_id=card_type.id,
+                                title=f"Ordem de Producao {code}",
+                                code=code,
+                                priority="medium",
+                                status=None,
+                                order_index=idx,
+                                created_by=admin.id,
+                                assigned_to=None,
+                                is_archived=False,
+                                metadata_json={},
+                            )
+                        )
+
         await session.commit()
         print("Seed inicial aplicado: modulos, permissoes, perfis e usuario Admin.")
 
