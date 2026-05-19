@@ -1,11 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
 import { ArrowDown, ArrowUp, Columns3, Factory, List, MonitorUp, Plus, RefreshCw, Trash2 } from "lucide-react";
-import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Children, FormEvent, isValidElement, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "../../shared/components/Button";
 import { useToast } from "../../shared/components/ToastProvider";
+import { getApiErrorMessage } from "../../shared/api/errors";
 import { usePortalWebSocketContext } from "../../shared/hooks/usePortalWebSocket";
+import { ErrorState, PortalSelect } from "../../shared/ui";
 import {
   createProductionChecklistItem,
   createProductionOrder,
@@ -305,7 +307,12 @@ export function KanbanProducaoPage() {
                 ))}
               </div>
             ) : ordersQuery.isError ? (
-              <div className="p-4 text-sm text-rose-200">Falha ao carregar OPs: {(ordersQuery.error as Error)?.message ?? "Erro inesperado."}</div>
+              <div className="space-y-3 p-4 text-sm text-rose-200">
+                <p>{getApiErrorMessage(ordersQuery.error, "Falha ao carregar OPs.")}</p>
+                <Button className="bg-panel text-slate-100 ring-1 ring-border hover:bg-slate-800" onClick={() => ordersQuery.refetch()}>
+                  Tentar novamente
+                </Button>
+              </div>
             ) : orders.length === 0 ? (
               <div className="p-4 text-sm text-slate-400">Nenhuma OP cadastrada.</div>
             ) : (
@@ -420,7 +427,12 @@ export function KanbanProducaoPage() {
                   ))}
                 </div>
               ) : tvQuery.isError ? (
-                <p className="text-sm text-rose-200">Falha ao carregar preview: {(tvQuery.error as Error)?.message ?? "Erro inesperado."}</p>
+                <ErrorState
+                  error={tvQuery.error}
+                  title="Falha ao carregar preview TV/Foco"
+                  fallback="Falha ao carregar preview TV/Foco."
+                  onRetry={() => void tvQuery.refetch()}
+                />
               ) : tvMode === "kanban" ? (
                 <TVKanbanPreview columns={tvKanbanColumns} />
               ) : (
@@ -496,13 +508,18 @@ function DateInput({ label, value, onChange }: { label: string; value?: string |
 }
 
 function SelectInput({ label, value, onChange, children }: { label: string; value: string; onChange: (value: string) => void; children: ReactNode }) {
+  const options = Children.toArray(children)
+    .filter(isValidElement)
+    .map((child) => {
+      const props = child.props as { value?: string; children?: ReactNode };
+      return {
+        value: String(props.value ?? ""),
+        label: Children.toArray(props.children).join(""),
+      };
+    });
+
   return (
-    <label className="min-w-0 space-y-1 text-sm text-slate-300">
-      <span>{label}</span>
-      <select value={value} onChange={(event) => onChange(event.target.value)} className="h-10 w-full min-w-0 rounded-md border border-border bg-slate-950 px-3 text-sm text-white">
-        {children}
-      </select>
-    </label>
+    <PortalSelect label={label} value={value} onChange={onChange} options={options} className="min-w-0" />
   );
 }
 

@@ -8,9 +8,10 @@ import { PortalShell } from "../shared/layout/PortalShell";
 import { AdminPage } from "../modules/admin/AdminPage";
 import { LoginPage } from "../modules/auth/LoginPage";
 import { DashboardPage } from "../modules/dashboard/DashboardPage";
-import { KanbanEnginePage } from "../modules/kanban/KanbanEnginePage";
 import { KanbanProducaoPage } from "../modules/production/KanbanProducaoPage";
 import { KanbanHubPage } from "../modules/kanban/KanbanHubPage";
+import { KanbanBoardPage } from "../modules/kanban/KanbanBoardPage";
+import { KanbanTvPage } from "../modules/kanban/KanbanTvPage";
 
 const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
@@ -24,8 +25,10 @@ const router = createBrowserRouter([
           { path: "admin", element: <ProtectedModuleRoute moduleKey="admin"><AdminPage /></ProtectedModuleRoute> },
           { path: "chat", element: <ProtectedModuleRoute moduleKey="chat"><PlaceholderPage title="Chat Interno" description="Comunicacao interna em tempo real para equipes e setores." /></ProtectedModuleRoute> },
           { path: "kanban", element: <ProtectedModuleRoute moduleKey="kanban"><KanbanHubPage /></ProtectedModuleRoute> },
+          { path: "kanban/tv", element: <ProtectedModuleRoute moduleKey="kanban"><KanbanTvPage /></ProtectedModuleRoute> },
           { path: "kanban/producao", element: <ProtectedModuleRoute moduleKey="kanban_producao"><KanbanProducaoPage /></ProtectedModuleRoute> },
-          { path: "kanban/:boardId?", element: <ProtectedModuleRoute moduleKey="kanban"><KanbanEnginePage /></ProtectedModuleRoute> },
+          { path: "kanban/boards/:boardId", element: <ProtectedModuleRoute moduleKey="kanban"><KanbanBoardPage /></ProtectedModuleRoute> },
+          { path: "kanban/:boardId", element: <ProtectedModuleRoute moduleKey="kanban"><KanbanBoardPage /></ProtectedModuleRoute> },
           { path: "propostas", element: <ProtectedModuleRoute moduleKey="propostas"><PlaceholderPage title="Propostas" description="Base para criacao, aprovacao e gestao de propostas comerciais." /></ProtectedModuleRoute> },
           { path: "compras", element: <ProtectedModuleRoute moduleKey="compras"><PlaceholderPage title="Compras" description="Base para cotacoes, solicitacoes e gestao de compras." /></ProtectedModuleRoute> },
           { path: "helpdesk", element: <ProtectedModuleRoute moduleKey="helpdesk"><PlaceholderPage title="HelpDesk TI" description="Base para tickets de suporte e atendimento interno." /></ProtectedModuleRoute> },

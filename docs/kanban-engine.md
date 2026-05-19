@@ -154,11 +154,15 @@ Nesta etapa a UI do **Kanban Engine** foi implementada no Portal Vesper consumin
 
 ### Telas / rotas
 
-- `/kanban` (redireciona para um board default quando existir)
-- `/kanban/:boardId`
+- `/kanban`: Hub Kanban. Lista quadros, permite criar quadros genericos e alternar contextos.
+- `/kanban/boards/:boardId`: quadro generico usando o Kanban Engine.
+- `/kanban/producao`: contexto especializado de Producao, sem item proprio na sidebar.
 
 Regra de abertura:
-- ao acessar `/kanban`, a UI lista boards disponiveis e tenta abrir o board com `key="producao"`; se nao existir, abre o primeiro board; se nao houver boards, mostra EmptyState.
+- a sidebar mostra apenas `Kanban`;
+- Producao, Projetos, TI/Operacional e Personalizados ficam dentro do Hub `/kanban`;
+- Projetos, TI e Operacional usam quadros genericos inicialmente;
+- especializacoes futuras devem continuar usando o Engine como base e adicionar tabelas especificas fora de `kanban_cards`.
 
 ### Componentes principais
 
@@ -169,6 +173,35 @@ Regra de abertura:
 - `CardDetailDrawer`: drawer a direita com detalhes e abas (checklist, comentarios, atividade).
 - `CardFormDialog`: modal para criar/editar card.
 - `ChecklistPanel`, `CommentsPanel`, `ActivityPanel`.
+- `KanbanHubPage`: central de quadros e contextos.
+- `KanbanBoardsOverview`: lista de quadros com filtro por tipo e contagem de cards.
+- `KanbanBoardCreateDialog`: cria quadro e colunas iniciais pelo API do Kanban Engine.
+- `KanbanTvPage`: TV/Foco global para qualquer quadro permitido.
+- `KanbanTvAdapter`: adapta cards genericos e OPs de Producao para um formato visual comum.
+
+### Padrao visual do Kanban
+
+As telas Kanban usam componentes escuros compartilhados em `apps/web/src/shared/ui`:
+
+- `PortalSelect` no lugar de select nativo;
+- `PageHeader`, `SectionCard`, `MetricCard` e `PortalBadge`;
+- `ErrorState`, `EmptyState`, `LoadingSkeleton`;
+- `PortalDialog`, `PortalDrawer` e `ConfirmDialog`.
+
+O objetivo e manter Hub, quadro generico, Producao e TV/Foco com o mesmo padrao visual do Portal Vesper.
+
+### TV/Foco global
+
+Rota interna: `/kanban/tv`.
+
+A TV/Foco global permite escolher qualquer quadro visivel ao usuario e alternar entre:
+
+- Lista;
+- Kanban.
+
+Para quadros genericos, a tela consulta `/api/kanban/boards`, `/api/kanban/boards/{board_id}/columns` e `/api/kanban/boards/{board_id}/cards`.
+
+Para Producao, quando o board selecionado tem `board_type=production` ou `module_context=producao`, a tela usa `/api/kanban/producao/tv` e adapta os dados de OP para o mesmo modelo de exibicao.
 
 ### Drag-and-drop
 
@@ -205,3 +238,27 @@ Esta etapa fortalece o Kanban Engine **generico** (sem regras de Producao/Projet
 - Regras mais fortes de ordenacao/reorder (shifts e consistencia de order_index).
 - Enforcar permissoes por quadro (`kanban_board_permissions`) e sharing.
 - Especializacoes (Producao, Projetos, Operacional) com tabelas dedicadas.
+
+## Diagnostico anti-404
+
+Antes de validar UI Kanban, confirme que o backend ativo e o codigo atual:
+
+```bash
+curl http://localhost:8000/api/health
+curl http://localhost:8000/openapi.json
+```
+
+O OpenAPI ativo deve listar:
+
+- `/api/kanban/boards`
+- `/api/kanban/boards/{board_id}`
+- `/api/kanban/boards/{board_id}/columns`
+- `/api/kanban/boards/{board_id}/cards`
+- `/api/kanban/cards`
+- `/api/kanban/producao/ops`
+- `/api/kanban/producao/dashboard`
+- `/api/kanban/producao/tv`
+
+Se alguma rota existir no codigo, mas nao aparecer no OpenAPI ativo, o backend rodando esta antigo ou na porta errada. Reinicie `npm run backend:dev`. Se a porta 8000 estiver presa, suba temporariamente em outra porta e ajuste `VITE_API_BASE_URL` no frontend de desenvolvimento.
+
+O frontend nao deve depender de `localhost:8000` hardcoded. Use `VITE_API_BASE_URL` para apontar para o backend ativo validado no OpenAPI.

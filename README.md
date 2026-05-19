@@ -173,3 +173,66 @@ A rota `/kanban/producao` implementa uma primeira fundacao simples para OPs:
 - TV/Foco simples por endpoint e preview visual.
 
 Ainda nao foram implementados risco, alertas, status automatico complexo, OCR/Telegram, importacao real ou TV final full screen.
+
+## Hub Kanban
+
+A sidebar mostra apenas `Kanban`. Dentro de `/kanban`, o Portal centraliza:
+
+- Quadros genericos;
+- Producao;
+- Projetos;
+- TI / Operacional;
+- Personalizados.
+
+Projetos, TI e Operacional usam o Kanban Engine generico nesta fase. Eles nao possuem item proprio na sidebar e nao sao modulos separados.
+
+Rotas principais:
+
+- `/kanban`
+- `/kanban/boards/:boardId`
+- `/kanban/producao`
+- `/kanban/tv`
+
+## Padrao visual e TV/Foco global do Kanban
+
+O Kanban usa componentes escuros padronizados do Portal para botoes, selects, dialogs, cards, estados vazios e estados de erro. Select/dropdown nativo branco nao deve ser usado nas telas do Kanban.
+
+A rota interna `/kanban/tv` e a TV/Foco global. Ela permite escolher qualquer quadro permitido e alternar entre lista e kanban. Para quadros genericos, consome cards/colunas do Kanban Engine. Para Producao, usa o endpoint especializado de OPs e adapta os dados para o mesmo formato visual.
+
+O frontend deve receber a API por `VITE_API_BASE_URL`. Em desenvolvimento, se o backend atual estiver em `8002`, suba o Vite com:
+
+```bash
+set VITE_API_BASE_URL=http://localhost:8002
+npm run dev:web
+```
+
+## Diagnostico de backend antigo / HTTP 404
+
+Se aparecer erro como `Not Found (HTTP 404)` em rotas esperadas do Kanban, confira primeiro o backend ativo:
+
+```bash
+npm run backend:dev
+```
+
+Em outra janela:
+
+```bash
+curl http://localhost:8000/api/health
+curl http://localhost:8000/openapi.json
+```
+
+O OpenAPI deve listar `/api/kanban/boards` e `/api/kanban/producao/*`. Se nao listar, o backend rodando esta antigo ou a porta esta presa. No Windows, use:
+
+```bash
+netstat -ano | findstr :8000
+```
+
+Se a porta 8000 estiver presa e nao puder ser liberada, suba o backend em outra porta e ajuste o frontend temporariamente:
+
+```bash
+cd backend
+.venv\Scripts\python -m uvicorn app.main:app --host 0.0.0.0 --port 8002 --no-access-log
+
+set VITE_API_BASE_URL=http://localhost:8002
+npm run dev:web
+```

@@ -1,20 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import * as kanbanApi from "./api";
+import { kanbanQueryKeys } from "./queryKeys";
 import type { CreateCardPayload, MoveCardPayload, UpdateCardPayload, UUID } from "./types";
-
-export const kanbanQueryKeys = {
-  boards: () => ["kanban", "boards"] as const,
-  board: (boardId: string) => ["kanban", "boards", boardId] as const,
-  columns: (boardId: string) => ["kanban", "boards", boardId, "columns"] as const,
-  cards: (boardId: string) => ["kanban", "boards", boardId, "cards"] as const,
-  card: (cardId: string) => ["kanban", "cards", cardId] as const,
-  checklist: (cardId: string) => ["kanban", "cards", cardId, "checklist"] as const,
-  comments: (cardId: string) => ["kanban", "cards", cardId, "comments"] as const,
-  attachments: (cardId: string) => ["kanban", "cards", cardId, "attachments"] as const,
-  activity: (cardId: string) => ["kanban", "cards", cardId, "activity"] as const,
-  boardActivity: (boardId: string) => ["kanban", "boards", boardId, "activity"] as const,
-};
+export { kanbanQueryKeys } from "./queryKeys";
 
 export function useKanbanBoards() {
   return useQuery({

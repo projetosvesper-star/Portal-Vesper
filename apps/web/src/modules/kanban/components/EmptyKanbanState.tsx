@@ -19,14 +19,14 @@ export function EmptyKanbanState({ onCreateBoard, className }: EmptyKanbanStateP
           <LayoutGrid className="h-5 w-5" />
         </div>
         <div className="min-w-0">
-          <h3 className="text-lg font-semibold text-white">Nenhum board disponível</h3>
+          <h3 className="text-lg font-semibold text-white">Nenhum quadro disponível</h3>
           <p className="mt-1 text-sm text-slate-400">
-            Você ainda não possui acesso a nenhum quadro Kanban. Se tiver permissão, crie um novo board ou peça para um
-            admin liberar acesso.
+            Você ainda não possui acesso a nenhum quadro Kanban. Se tiver permissão, crie um novo quadro ou peça para um
+            administrador liberar acesso.
           </p>
           {showCreate ? (
             <div className="mt-5">
-              <Button onClick={onCreateBoard}>Criar board</Button>
+              <Button onClick={onCreateBoard}>Criar quadro</Button>
             </div>
           ) : null}
         </div>
@@ -34,4 +34,3 @@ export function EmptyKanbanState({ onCreateBoard, className }: EmptyKanbanStateP
     </section>
   );
 }
-

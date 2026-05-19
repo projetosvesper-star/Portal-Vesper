@@ -1,10 +1,11 @@
-import { Dispatch, FormEvent, ReactNode, SetStateAction, useCallback, useEffect, useMemo, useState } from "react";
+import { Children, Dispatch, FormEvent, isValidElement, ReactNode, SetStateAction, useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
 import { Archive, ArrowDown, ArrowUp, Edit, RotateCw, Trash2, X } from "lucide-react";
 
 import { Button } from "../../shared/components/Button";
 import { useToast } from "../../shared/components/ToastProvider";
+import { ConfirmDialog, PortalSelect } from "../../shared/ui";
 import {
   archiveProductionOrder,
   createProductionChecklistItem,
@@ -36,6 +37,7 @@ export function ProductionOrderDrawer({ orderId, onClose }: Props) {
   const [newChecklistTitle, setNewChecklistTitle] = useState("");
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [orderSaveError, setOrderSaveError] = useState<string | null>(null);
+  const [deleteChecklistItemId, setDeleteChecklistItemId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<CreateProductionOrderPayload>>({});
 
   const orderQuery = useQuery({ queryKey: productionQueryKeys.orderDetail(orderId), queryFn: () => getProductionOrder(orderId) });
@@ -333,8 +335,7 @@ export function ProductionOrderDrawer({ orderId, onClose }: Props) {
                       onMoveUp={(index) => moveChecklistItem(index, -1)}
                       onMoveDown={(index) => moveChecklistItem(index, 1)}
                       onDelete={(itemId) => {
-                        if (!window.confirm("Remover este item do checklist?")) return;
-                        deleteChecklistMutation.mutate(itemId);
+                        setDeleteChecklistItemId(itemId);
                       }}
                       onAdd={(event) => {
                         event.preventDefault();
@@ -352,6 +353,17 @@ export function ProductionOrderDrawer({ orderId, onClose }: Props) {
           )}
         </div>
       </aside>
+      <ConfirmDialog
+        open={Boolean(deleteChecklistItemId)}
+        title="Remover item do checklist"
+        description="Confirme para remover este item somente da OP atual. O template original não será alterado."
+        confirmLabel="Remover"
+        destructive
+        onClose={() => setDeleteChecklistItemId(null)}
+        onConfirm={() => {
+          if (deleteChecklistItemId) deleteChecklistMutation.mutate(deleteChecklistItemId);
+        }}
+      />
     </div>
   );
 }
@@ -646,13 +658,18 @@ function DateInput({ label, value, onChange }: { label: string; value?: string |
 }
 
 function SelectInput({ label, value, onChange, children }: { label: string; value: string; onChange: (value: string) => void; children: ReactNode }) {
+  const options = Children.toArray(children)
+    .filter(isValidElement)
+    .map((child) => {
+      const props = child.props as { value?: string; children?: ReactNode };
+      return {
+        value: String(props.value ?? ""),
+        label: Children.toArray(props.children).join(""),
+      };
+    });
+
   return (
-    <label className="block min-w-0 space-y-1 text-sm text-slate-300">
-      <span>{label}</span>
-      <select value={value} onChange={(event) => onChange(event.target.value)} className="h-10 w-full min-w-0 rounded-md border border-border bg-slate-950 px-3 text-sm text-white">
-        {children}
-      </select>
-    </label>
+    <PortalSelect label={label} value={value} onChange={onChange} options={options} className="min-w-0" />
   );
 }
 

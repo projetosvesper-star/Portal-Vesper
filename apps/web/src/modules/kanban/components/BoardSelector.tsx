@@ -1,5 +1,4 @@
-import { ChevronDown } from "lucide-react";
-
+import { PortalSelect } from "../../../shared/ui";
 import type { KanbanBoard } from "../types";
 
 type BoardSelectorProps = {
@@ -11,24 +10,18 @@ type BoardSelectorProps = {
 
 export function BoardSelector({ boards, value, onChange, disabled }: BoardSelectorProps) {
   return (
-    <div className="relative">
-      <select
-        className="h-10 min-w-[220px] appearance-none rounded-md border border-border bg-white/[0.04] px-3 pr-10 text-sm text-slate-200 outline-none focus:border-cyan/60 disabled:cursor-not-allowed disabled:opacity-60"
+    <div className="min-w-[220px]">
+      <PortalSelect
         value={value ?? ""}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={onChange}
         disabled={disabled}
-      >
-        <option value="" disabled>
-          Selecionar board
-        </option>
-        {boards.map((b) => (
-          <option key={b.id} value={b.id}>
-            {b.name}
-          </option>
-        ))}
-      </select>
-      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        placeholder="Selecionar quadro"
+        options={boards.map((board) => ({
+          value: board.id,
+          label: board.name,
+          description: [board.board_type, board.module_context].filter(Boolean).join(" · "),
+        }))}
+      />
     </div>
   );
 }
-

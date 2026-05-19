@@ -35,6 +35,12 @@ Cada modulo deve ter pasta propria no backend e no frontend, permissao `modulo.v
 
 O Kanban Engine e um **motor unico e generico** de quadros/colunas/cards. Ele sera reutilizado por contextos diferentes (producao, projetos, operacional, helpdesk e quadros customizados) sem duplicar codigo nem criar campos industriais diretamente em `kanban_cards`.
 
+O Hub `/kanban` e a entrada unica para todos os quadros Kanban no frontend. A sidebar nao deve receber itens separados para Kanban Producao, Kanban Projetos, Kanban TI ou Kanban Operacional. Esses contextos vivem dentro do modulo Kanban e usam o mesmo backend generico, exceto quando uma camada de dominio especifica for necessaria.
+
+A rota `/kanban/tv` fornece TV/Foco global do Kanban. Ela usa uma camada adaptadora no frontend para transformar cards genericos e OPs de Producao no mesmo formato visual, evitando duplicacao de UI e mantendo Producao como contexto interno do Kanban.
+
+As telas do Kanban compartilham componentes de UI escuros em `apps/web/src/shared/ui`, evitando selects nativos brancos, estados de erro inconsistentes e dialogs fora do padrao do Portal.
+
 Detalhes: `docs/kanban-engine.md`.
 
 ## Kanban Producao
@@ -44,3 +50,13 @@ O Kanban Producao e uma camada especifica de dominio sobre o Kanban Engine. A OP
 Nesta primeira fundacao foram adicionados OP simples, checklist editavel por OP, templates de checklist, TV/Foco simples e eventos `kanban_producao.*`. Recursos avancados como risco, alertas, OCR, Telegram e automacoes ficam para fases futuras.
 
 Detalhes: `docs/kanban-producao.md`.
+
+## Validacao do backend ativo
+
+Antes de testar telas que consomem API, valide o backend realmente ativo:
+
+- `GET /api/health`;
+- `GET /api/docs`;
+- `GET /openapi.json`.
+
+Se o OpenAPI ativo nao listar uma rota que existe no codigo, o problema e operacional: backend antigo, porta presa, Docker/imagem antiga ou `API_BASE_URL` apontando para o servidor errado. A UI deve mostrar erro contextual, mas a solucao correta e reiniciar o backend atual ou ajustar `VITE_API_BASE_URL`.

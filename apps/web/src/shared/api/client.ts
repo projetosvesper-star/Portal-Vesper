@@ -1,6 +1,6 @@
 import { useAuthStore } from "../auth/store";
 
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 
 type RequestOptions = RequestInit & {
   auth?: boolean;
@@ -46,7 +46,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     response = await fetch(url, { ...options, headers });
   } catch (err) {
     const hint =
-      "Falha de rede/CORS. Verifique se o backend está em http://localhost:8000 e se CORS_ORIGINS inclui http://127.0.0.1:5174.";
+      `Falha de rede/CORS. Verifique se o backend esta em ${API_BASE_URL} e se CORS_ORIGINS inclui ${window.location.origin}.`;
     throw new ApiRequestError(hint, { url, method });
   }
   if (response.status === 401 && options.auth !== false && requestOptions.retry) {

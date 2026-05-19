@@ -39,6 +39,23 @@ O **Kanban Engine** e o primeiro modulo com implementacao real no backend, proje
 
 Documentacao completa: `docs/kanban-engine.md`.
 
+### Hub Kanban
+
+A sidebar deve continuar exibindo apenas um item: `Kanban`.
+
+Dentro de `/kanban`, o usuario acessa os contextos:
+
+- Quadros;
+- Producao;
+- Projetos;
+- TI / Operacional;
+- Personalizados.
+- TV/Foco.
+
+Projetos, TI e Operacional nao sao modulos separados nesta fase. Eles sao quadros genericos do Kanban Engine, filtrados por `board_type` e `module_context`.
+
+A TV/Foco tambem e interna ao Kanban (`/kanban/tv`) e nao deve aparecer como item separado na sidebar. Ela usa o mesmo mecanismo de permissoes: quadros genericos dependem de `kanban.view`/`kanban.board.view`, e Producao depende de `kanban_producao.view`.
+
 ## Kanban Producao
 
 O **Kanban Producao** e um modulo especifico sobre o Kanban Engine. Ele registra o modulo `kanban_producao`, rota `/kanban/producao`, icone `Factory` e permissoes `kanban_producao.*`.

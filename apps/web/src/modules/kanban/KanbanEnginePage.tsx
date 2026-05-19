@@ -1,16 +1,13 @@
-export function KanbanEnginePage() {
-  return <KanbanEnginePageInner />;
-}
-
-import { useMemo, useState, useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 
-import { Button } from "../../shared/components/Button";
 import { useToast } from "../../shared/components/ToastProvider";
 import { cn } from "../../shared/utils/cn";
 import { usePortalWebSocketContext } from "../../shared/hooks/usePortalWebSocket";
+import { EmptyState, ErrorState, MetricCard, PageHeader, PortalButton, PortalInput } from "../../shared/ui";
+import { createColumn } from "./api";
 import {
   kanbanQueryKeys,
   useCreateKanbanCard,
@@ -30,10 +27,14 @@ import { KanbanBoard } from "./components/KanbanBoard";
 import { KanbanBoardSkeleton } from "./components/KanbanBoardSkeleton";
 import { canCreateCard } from "./utils/permissions";
 
+export function KanbanEnginePage() {
+  return <KanbanEnginePageInner />;
+}
+
 function KanbanEnginePageInner() {
   const navigate = useNavigate();
   const params = useParams();
-  const boardIdParam = (params as any).boardId as string | undefined;
+  const boardIdParam = (params as { boardId?: string }).boardId;
   const queryClient = useQueryClient();
   const { subscribe } = usePortalWebSocketContext();
   const toast = useToast();
@@ -52,76 +53,92 @@ function KanbanEnginePageInner() {
   const [cardFormColumnId, setCardFormColumnId] = useState<string | undefined>(undefined);
   const [editingCardId, setEditingCardId] = useState<string | null>(null);
   const [drawerCardId, setDrawerCardId] = useState<string | null>(null);
+  const [manualColumnName, setManualColumnName] = useState("");
 
   const boardsQuery = useKanbanBoards();
   const boards = boardsQuery.data ?? [];
-
   const selectedBoardId = boardIdParam ?? null;
 
-  // Autoseleção de board ao entrar em /kanban
   useEffect(() => {
     if (selectedBoardId) return;
     if (boardsQuery.isLoading) return;
     if (boards.length === 0) return;
-    const preferred = boards.find((b) => b.key === "producao") ?? boards[0];
-    navigate(`/kanban/${preferred.id}`, { replace: true });
+    const preferred = boards.find((board) => board.key === "kanban_producao" || board.module_context === "producao") ?? boards[0];
+    navigate(`/kanban/boards/${preferred.id}`, { replace: true });
   }, [selectedBoardId, boardsQuery.isLoading, boards, navigate]);
 
   const columnsQuery = useKanbanColumns(selectedBoardId ?? undefined);
   const cardsQuery = useKanbanCards(selectedBoardId ?? undefined);
-
   const columns = columnsQuery.data ?? [];
   const cards = cardsQuery.data ?? [];
 
   const columnsById = useMemo(() => {
     const map = new Map<string, KanbanColumn>();
-    for (const c of columns) map.set(c.id, c);
+    for (const column of columns) map.set(column.id, column);
     return map;
   }, [columns]);
 
   const computed = useMemo(() => {
     const now = Date.now();
     const total = cards.length;
-    const archived = cards.filter((c) => c.is_archived).length;
-    const done = cards.filter((c) => {
-      const col = columnsById.get(c.column_id);
-      return Boolean(c.completed_at) || Boolean(col?.is_done);
+    const archived = cards.filter((card) => card.is_archived).length;
+    const done = cards.filter((card) => {
+      const column = columnsById.get(card.column_id);
+      return Boolean(card.completed_at) || Boolean(column?.is_done);
     }).length;
-    const inProgress = cards.filter((c) => !c.is_archived && !Boolean(c.completed_at) && !Boolean(columnsById.get(c.column_id)?.is_done)).length;
-    const delayed = cards.filter((c) => {
-      if (c.is_archived) return false;
-      if (!c.due_date) return false;
-      if (Boolean(c.completed_at) || Boolean(columnsById.get(c.column_id)?.is_done)) return false;
-      const due = new Date(c.due_date).getTime();
+    const inProgress = cards.filter((card) => !card.is_archived && !card.completed_at && !columnsById.get(card.column_id)?.is_done).length;
+    const delayed = cards.filter((card) => {
+      if (card.is_archived || !card.due_date || card.completed_at || columnsById.get(card.column_id)?.is_done) return false;
+      const due = new Date(card.due_date).getTime();
       return !Number.isNaN(due) && due < now;
     }).length;
     return { total, archived, done, inProgress, delayed };
   }, [cards, columnsById]);
 
   const filteredCards = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return cards.filter((c) => {
-      if (!showArchived && c.is_archived) return false;
-      if (!q) return true;
-      return (c.title ?? "").toLowerCase().includes(q) || (c.code ?? "").toLowerCase().includes(q);
+    const query = search.trim().toLowerCase();
+    return cards.filter((card) => {
+      if (!showArchived && card.is_archived) return false;
+      if (!query) return true;
+      return (card.title ?? "").toLowerCase().includes(query) || (card.code ?? "").toLowerCase().includes(query);
     });
   }, [cards, search, showArchived]);
 
   const moveMutation = useMoveKanbanCard(selectedBoardId ?? undefined);
   const createCardMutation = useCreateKanbanCard(selectedBoardId ?? undefined);
   const updateCardMutation = useUpdateKanbanCard();
+  const createColumnMutation = useMutation({
+    mutationFn: ({ name, orderIndex, isDone = false }: { name: string; orderIndex: number; isDone?: boolean }) =>
+      createColumn(selectedBoardId!, {
+        name,
+        key: slugify(name),
+        order_index: orderIndex,
+        is_done: isDone,
+        metadata: { created_from: "kanban_board_page" },
+      }),
+    onSuccess: async () => {
+      if (!selectedBoardId) return;
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: kanbanQueryKeys.columns(selectedBoardId) }),
+        queryClient.invalidateQueries({ queryKey: kanbanQueryKeys.board(selectedBoardId) }),
+      ]);
+      setManualColumnName("");
+    },
+    onError: (error) => {
+      toast.error("Falha ao criar coluna", (error as Error)?.message ?? "Erro inesperado");
+    },
+  });
 
-  const editingCard = useMemo(() => cards.find((c) => c.id === editingCardId) ?? null, [cards, editingCardId]);
+  const editingCard = useMemo(() => cards.find((card) => card.id === editingCardId) ?? null, [cards, editingCardId]);
 
-  // WebSocket → invalidação TanStack Query
   useEffect(() => {
     return subscribe((event) => {
       if (!event?.type?.startsWith("kanban.")) return;
 
       const type = event.type;
-      const payload = (event.payload ?? {}) as any;
-      const cardId = (payload.card_id ?? payload.cardId) as string | undefined;
-      const boardId = (payload.board_id ?? payload.boardId) as string | undefined;
+      const payload = (event.payload ?? {}) as { card_id?: string; cardId?: string; board_id?: string; boardId?: string };
+      const cardId = payload.card_id ?? payload.cardId;
+      const boardId = payload.board_id ?? payload.boardId;
 
       const pending = wsPendingRef.current;
       if (type.startsWith("kanban.board.")) pending.boards = true;
@@ -135,14 +152,14 @@ function KanbanEnginePageInner() {
 
       if (wsTimerRef.current) window.clearTimeout(wsTimerRef.current);
       wsTimerRef.current = window.setTimeout(() => {
-        const p = wsPendingRef.current;
-        if (p.boards) queryClient.invalidateQueries({ queryKey: kanbanQueryKeys.boards() });
+        const pendingState = wsPendingRef.current;
+        if (pendingState.boards) queryClient.invalidateQueries({ queryKey: kanbanQueryKeys.boards() });
         if (selectedBoardId) {
-          if (p.board) queryClient.invalidateQueries({ queryKey: kanbanQueryKeys.board(selectedBoardId) });
-          if (p.columns) queryClient.invalidateQueries({ queryKey: kanbanQueryKeys.columns(selectedBoardId) });
-          if (p.cards) queryClient.invalidateQueries({ queryKey: kanbanQueryKeys.cards(selectedBoardId) });
+          if (pendingState.board) queryClient.invalidateQueries({ queryKey: kanbanQueryKeys.board(selectedBoardId) });
+          if (pendingState.columns) queryClient.invalidateQueries({ queryKey: kanbanQueryKeys.columns(selectedBoardId) });
+          if (pendingState.cards) queryClient.invalidateQueries({ queryKey: kanbanQueryKeys.cards(selectedBoardId) });
         }
-        for (const id of p.cardIds ?? []) {
+        for (const id of pendingState.cardIds ?? []) {
           queryClient.invalidateQueries({ queryKey: kanbanQueryKeys.card(id) });
           queryClient.invalidateQueries({ queryKey: kanbanQueryKeys.checklist(id) });
           queryClient.invalidateQueries({ queryKey: kanbanQueryKeys.comments(id) });
@@ -159,7 +176,7 @@ function KanbanEnginePageInner() {
   const canCreate = canCreatePerm && Boolean(selectedBoardId) && columns.length > 0;
 
   function handleSelectBoard(nextBoardId: string) {
-    navigate(`/kanban/${nextBoardId}`);
+    navigate(`/kanban/boards/${nextBoardId}`);
     setDrawerCardId(null);
   }
 
@@ -169,88 +186,111 @@ function KanbanEnginePageInner() {
     setCardFormOpen(true);
   }
 
-  async function handleSubmitCard(values: any) {
-      const payloadBase = {
-        board_id: values.board_id,
-        column_id: values.column_id,
-        title: values.title.trim(),
-        description: values.description?.trim() || null,
-        priority: (values.priority as Priority) ?? "medium",
-        due_date: values.due_date || null,
-        start_date: values.start_date || null,
-        assigned_to: values.assigned_to || null,
-        code: values.code?.trim() || null,
-        status: values.status?.trim() || null,
-      };
+  async function handleSubmitCard(values: {
+    board_id: UUID;
+    column_id: UUID;
+    title: string;
+    description?: string;
+    priority?: Priority;
+    due_date?: string;
+    start_date?: string;
+    assigned_to?: string;
+    code?: string;
+    status?: string;
+  }) {
+    const payloadBase = {
+      board_id: values.board_id,
+      column_id: values.column_id,
+      title: values.title.trim(),
+      description: values.description?.trim() || null,
+      priority: values.priority ?? "medium",
+      due_date: values.due_date || null,
+      start_date: values.start_date || null,
+      assigned_to: values.assigned_to || null,
+      code: values.code?.trim() || null,
+      status: values.status?.trim() || null,
+    };
 
-      try {
-        if (editingCardId) {
-          // Detectar mudança de coluna
-          const columnChanged = editingCard?.column_id !== values.column_id;
-          await updateCardMutation.mutateAsync({ cardId: editingCardId as UUID, payload: payloadBase });
-          if (columnChanged) {
-            // chamar endpoint de movimento
-            await moveMutation.mutateAsync({
-              cardId: editingCardId as UUID,
-              payload: {
-                to_column_id: values.column_id as UUID,
-                new_order_index: 0,
-              },
-            });
-          }
-          toast.success("Card atualizado", "Alterações salvas com sucesso.");
-        } else {
-          await createCardMutation.mutateAsync(payloadBase);
-          toast.success("Card criado", "Novo card criado com sucesso.");
+    try {
+      if (editingCardId) {
+        const columnChanged = editingCard?.column_id !== values.column_id;
+        await updateCardMutation.mutateAsync({ cardId: editingCardId as UUID, payload: payloadBase });
+        if (columnChanged) {
+          await moveMutation.mutateAsync({
+            cardId: editingCardId as UUID,
+            payload: {
+              to_column_id: values.column_id,
+              new_order_index: 0,
+            },
+          });
         }
-      } catch (e) {
-        toast.error("Falha ao salvar card", (e as Error)?.message ?? "Erro inesperado");
-        throw e;
+        toast.success("Card atualizado", "Alterações salvas com sucesso.");
+      } else {
+        await createCardMutation.mutateAsync(payloadBase);
+        toast.success("Card criado", "Novo card criado com sucesso.");
       }
+    } catch (error) {
+      toast.error("Falha ao salvar card", (error as Error)?.message ?? "Erro inesperado");
+      throw error;
     }
+  }
 
   function handleMoveCard(args: { cardId: string; toColumnId: string; newOrderIndex: number }) {
     moveMutation.mutate(
       { cardId: args.cardId as UUID, payload: { to_column_id: args.toColumnId, new_order_index: args.newOrderIndex } },
       {
         onSuccess: () => toast.success("Card movido", "Posição atualizada."),
-        onError: (e) => toast.error("Falha ao mover card", (e as Error)?.message ?? "Erro inesperado"),
+        onError: (error) => toast.error("Falha ao mover card", (error as Error)?.message ?? "Erro inesperado"),
       },
     );
+  }
+
+  async function createDefaultColumns() {
+    if (!selectedBoardId) return;
+    const names = ["A fazer", "Em andamento", "Revisão", "Concluído"];
+    for (const [index, name] of names.entries()) {
+      await createColumnMutation.mutateAsync({ name, orderIndex: index, isDone: index === names.length - 1 });
+    }
+    toast.success("Colunas criadas", "As colunas padrão foram criadas para este quadro.");
+  }
+
+  function createManualColumn() {
+    const name = manualColumnName.trim();
+    if (!name) return;
+    createColumnMutation.mutate({ name, orderIndex: columns.length });
   }
 
   const isEmpty = !boardsQuery.isLoading && !boardsQuery.isError && boards.length === 0;
 
   return (
-    <div className="space-y-6">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-semibold text-white">Kanban</h1>
-          <p className="mt-1 text-sm text-slate-400">Gerencie quadros, colunas e cards do Portal Vesper</p>
-        </div>
+    <div className="min-w-0 space-y-6 overflow-x-hidden p-4 sm:p-6">
+      <PageHeader
+        title="Kanban"
+        subtitle="Gerencie quadros, colunas e cards do Portal Vesper."
+        actions={
+          <>
+            <BoardSelector boards={boards} value={selectedBoardId} onChange={handleSelectBoard} disabled={boardsQuery.isLoading || boards.length === 0} />
+            <PortalButton
+              onClick={() => openCreateCard()}
+              disabled={!canCreate}
+              title={
+                !selectedBoardId
+                  ? "Selecione um quadro"
+                  : columns.length === 0
+                    ? "Quadro sem colunas"
+                    : !canCreatePerm
+                      ? "Sem permissão para criar card"
+                      : "Criar novo card"
+              }
+            >
+              <Plus className="h-4 w-4" />
+              Novo card
+            </PortalButton>
+          </>
+        }
+      />
 
-        <div className="flex flex-wrap items-center gap-3">
-          <BoardSelector boards={boards} value={selectedBoardId} onChange={handleSelectBoard} disabled={boardsQuery.isLoading || boards.length === 0} />
-          <Button
-            onClick={() => openCreateCard()}
-            disabled={!canCreate}
-            title={
-              !selectedBoardId
-                ? "Selecione um board"
-                : columns.length === 0
-                  ? "Board sem colunas"
-                  : !canCreatePerm
-                    ? "Sem permissão para criar card"
-                    : "Criar novo card"
-            }
-          >
-            <Plus className="h-4 w-4" />
-            Novo card
-          </Button>
-        </div>
-      </header>
-
-      <section className="grid gap-3 md:grid-cols-5">
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         {[
           { label: "Total", value: computed.total },
           { label: "Em andamento", value: computed.inProgress },
@@ -258,10 +298,7 @@ function KanbanEnginePageInner() {
           { label: "Concluídos", value: computed.done },
           { label: "Arquivados", value: computed.archived },
         ].map((kpi) => (
-          <div key={kpi.label} className="rounded-lg border border-border bg-panel/60 p-4">
-            <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500">{kpi.label}</p>
-            <p className="mt-2 text-2xl font-semibold text-white">{kpi.value}</p>
-          </div>
+          <MetricCard key={kpi.label} label={kpi.label} value={kpi.value} />
         ))}
       </section>
 
@@ -270,7 +307,7 @@ function KanbanEnginePageInner() {
           search={search}
           onSearchChange={setSearch}
           showArchived={showArchived}
-          onToggleArchived={() => setShowArchived((v) => !v)}
+          onToggleArchived={() => setShowArchived((current) => !current)}
           onRefresh={() => {
             if (!selectedBoardId) return;
             queryClient.invalidateQueries({ queryKey: kanbanQueryKeys.columns(selectedBoardId) });
@@ -281,29 +318,47 @@ function KanbanEnginePageInner() {
       </section>
 
       {boardsQuery.isError ? (
-        <div className="rounded-lg border border-border bg-panel/60 p-6 text-sm text-rose-200">
-          {(boardsQuery.error as Error)?.message ?? "Falha ao carregar boards."}
-        </div>
+        <ErrorState error={boardsQuery.error} title="Falha ao carregar quadros" fallback="Falha ao carregar quadros." onRetry={() => boardsQuery.refetch()} />
       ) : isEmpty ? (
         <EmptyKanbanState />
       ) : !selectedBoardId ? (
-        <div className="rounded-lg border border-border bg-panel/60 p-6 text-sm text-slate-300">Selecione um board.</div>
+        <EmptyState title="Selecione um quadro" description="Escolha um quadro para visualizar colunas e cards." />
       ) : columnsQuery.isLoading || cardsQuery.isLoading ? (
         <KanbanBoardSkeleton />
       ) : columnsQuery.isError || cardsQuery.isError ? (
-        <div className="rounded-lg border border-border bg-panel/60 p-6 text-sm text-rose-200">
-          {(columnsQuery.error as Error)?.message ?? (cardsQuery.error as Error)?.message ?? "Falha ao carregar dados do board."}
-        </div>
+        <ErrorState
+          error={columnsQuery.error ?? cardsQuery.error}
+          title="Falha ao carregar dados do quadro"
+          fallback="Falha ao carregar dados do quadro."
+          onRetry={() => {
+            void columnsQuery.refetch();
+            void cardsQuery.refetch();
+          }}
+        />
       ) : columns.length === 0 ? (
-        <div className="rounded-lg border border-border bg-panel/60 p-6 text-sm text-slate-300">
-          Este board não possui colunas ativas.
-        </div>
+        <EmptyState
+          title="Este quadro ainda não possui colunas."
+          description="Crie colunas padrão ou adicione uma coluna manualmente para começar a organizar cards."
+          action={
+            <>
+              <PortalButton onClick={() => void createDefaultColumns()} disabled={createColumnMutation.isPending}>
+                Criar colunas padrão
+              </PortalButton>
+              <div className="flex min-w-[260px] flex-col gap-2 sm:flex-row">
+                <PortalInput value={manualColumnName} onChange={(event) => setManualColumnName(event.target.value)} placeholder="Nome da coluna" />
+                <PortalButton variant="secondary" onClick={createManualColumn} disabled={!manualColumnName.trim() || createColumnMutation.isPending}>
+                  Criar coluna manualmente
+                </PortalButton>
+              </div>
+            </>
+          }
+        />
       ) : (
         <KanbanBoard
           columns={columns}
           cards={filteredCards}
           onOpenCard={(id) => setDrawerCardId(id)}
-          onCreateCard={(colId) => openCreateCard(colId)}
+          onCreateCard={(columnId) => openCreateCard(columnId)}
           onMoveCard={handleMoveCard}
         />
       )}
@@ -333,9 +388,19 @@ function KanbanEnginePageInner() {
 
       {boardsQuery.isFetching || columnsQuery.isFetching || cardsQuery.isFetching ? (
         <div className={cn("fixed bottom-4 right-4 rounded-md border border-border bg-panel/90 px-3 py-2 text-xs text-slate-200")}>
-          Atualizando…
+          Atualizando...
         </div>
       ) : null}
     </div>
   );
+}
+
+function slugify(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 80);
 }

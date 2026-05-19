@@ -1,7 +1,7 @@
 import { Archive, RefreshCw, Search } from "lucide-react";
 
-import { Button } from "../../../shared/components/Button";
 import { cn } from "../../../shared/utils/cn";
+import { PortalButton } from "../../../shared/ui";
 
 type BoardToolbarProps = {
   search: string;
@@ -28,7 +28,7 @@ export function BoardToolbar({
           className="h-10 w-full rounded-md border border-border bg-white/[0.04] pl-10 pr-3 text-sm text-slate-200 outline-none placeholder:text-slate-500 focus:border-cyan/60"
           placeholder="Filtrar cards por título/código"
           value={search}
-          onChange={(e) => onSearchChange(e.target.value)}
+          onChange={(event) => onSearchChange(event.target.value)}
         />
       </div>
 
@@ -40,17 +40,16 @@ export function BoardToolbar({
           showArchived && "border-cyan/30 bg-cyan/10 text-cyan",
         )}
         onClick={onToggleArchived}
-        title="Mostrar/ocultar cards arquivados"
+        title="Mostrar ou ocultar cards arquivados"
       >
         <Archive className="h-4 w-4" />
         Arquivados
       </button>
 
-      <Button className="h-10" onClick={onRefresh} disabled={disableRefresh}>
+      <PortalButton className="h-10" onClick={onRefresh} disabled={disableRefresh}>
         <RefreshCw className="h-4 w-4" />
         Atualizar
-      </Button>
+      </PortalButton>
     </div>
   );
 }
-

@@ -25,8 +25,12 @@ import type {
   UUID,
 } from "./types";
 
-export async function listBoards() {
-  return apiRequest<KanbanBoard[]>("/api/kanban/boards");
+export async function listBoards(filters: { boardType?: string | null; moduleContext?: string | null } = {}) {
+  const params = new URLSearchParams();
+  if (filters.boardType) params.set("board_type", filters.boardType);
+  if (filters.moduleContext) params.set("module_context", filters.moduleContext);
+  const query = params.toString();
+  return apiRequest<KanbanBoard[]>(`/api/kanban/boards${query ? `?${query}` : ""}`);
 }
 
 export async function createBoard(payload: CreateBoardPayload) {
