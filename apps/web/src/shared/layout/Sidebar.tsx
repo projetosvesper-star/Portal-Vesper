@@ -24,10 +24,21 @@ export function Sidebar({ modules }: SidebarProps) {
 
       <nav className="flex flex-1 flex-col gap-1">
         <NavItem to="/" icon={LayoutDashboard} label="Dashboard" />
-        {modules.map((module) => {
-          const Icon = iconMap[module.icon] ?? LayoutDashboard;
-          return <NavItem key={module.key} to={module.route} icon={Icon} label={module.name} />;
-        })}
+        {/**
+         * Hide certain submodules from sidebar and surface them inside their
+         * parent module (e.g. `kanban_producao` should be a context inside
+         * the `kanban` module). This is a frontend-only mapping to avoid
+         * changing backend module registry for now.
+         */}
+        {modules
+          .filter((m) => {
+            const hiddenSidebarModules = ["kanban_producao"];
+            return !hiddenSidebarModules.includes(m.key);
+          })
+          .map((module) => {
+            const Icon = iconMap[module.icon] ?? LayoutDashboard;
+            return <NavItem key={module.key} to={module.route} icon={Icon} label={module.name} />;
+          })}
       </nav>
 
       <div className="rounded-md border border-border bg-white/[0.03] p-3 text-xs text-slate-400">

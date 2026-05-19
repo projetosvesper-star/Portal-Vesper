@@ -10,6 +10,7 @@ import { LoginPage } from "../modules/auth/LoginPage";
 import { DashboardPage } from "../modules/dashboard/DashboardPage";
 import { KanbanEnginePage } from "../modules/kanban/KanbanEnginePage";
 import { KanbanProducaoPage } from "../modules/production/KanbanProducaoPage";
+import { KanbanHubPage } from "../modules/kanban/KanbanHubPage";
 
 const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
@@ -22,6 +23,7 @@ const router = createBrowserRouter([
           { index: true, element: <DashboardPage /> },
           { path: "admin", element: <ProtectedModuleRoute moduleKey="admin"><AdminPage /></ProtectedModuleRoute> },
           { path: "chat", element: <ProtectedModuleRoute moduleKey="chat"><PlaceholderPage title="Chat Interno" description="Comunicacao interna em tempo real para equipes e setores." /></ProtectedModuleRoute> },
+          { path: "kanban", element: <ProtectedModuleRoute moduleKey="kanban"><KanbanHubPage /></ProtectedModuleRoute> },
           { path: "kanban/producao", element: <ProtectedModuleRoute moduleKey="kanban_producao"><KanbanProducaoPage /></ProtectedModuleRoute> },
           { path: "kanban/:boardId?", element: <ProtectedModuleRoute moduleKey="kanban"><KanbanEnginePage /></ProtectedModuleRoute> },
           { path: "propostas", element: <ProtectedModuleRoute moduleKey="propostas"><PlaceholderPage title="Propostas" description="Base para criacao, aprovacao e gestao de propostas comerciais." /></ProtectedModuleRoute> },
