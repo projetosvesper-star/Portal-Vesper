@@ -1,74 +1,116 @@
-# Teste Manual Guiado — Kanban Produção UI
+# Teste Manual Kanban Producao UI
 
-Pré-requisitos
+Use este checklist para validar manualmente a UI atual do Kanban Producao.
 
-- Infra local (docker-compose) e backend rodando.
-- Frontend: `npm run dev --workspace=apps/web` ou `npm run build --workspace=apps/web` + servidor estático.
-- Conta com permissão `kanban_producao.view` para acessar Produção.
+## Pre-condicoes
 
-Passos detalhados
+- Docker/infra local ativo.
+- Banco migrado.
+- Seed executado.
+- Backend reiniciado com o codigo atual.
+- Frontend reiniciado com o codigo atual.
+- Usuario Admin disponivel.
 
-1) Login
-	- Acesse a aplicação e faça login com um usuário administrador.
+Comandos sugeridos:
 
-2) Verificar sidebar
-	- Confirme que a sidebar mostra apenas o item `Kanban` e NÃO mostra `Kanban Produção` como item separado.
+```bash
+npm run infra:up
+npm run backend:migrate
+npm run backend:seed
+npm run backend:dev
+npm run dev:web
+```
 
-3) Abrir Hub Kanban
-	- Navegue para `/kanban`.
-	- No seletor de contextos, confirme que a opção `Produção` existe (se o usuário tiver permissão).
-	- Selecione `Produção` — o app deve navegar para `/kanban/producao`.
+Observacao importante: durante a validacao desta etapa, havia uma instancia backend antiga ativa em `localhost:8000`, sem as rotas `/api/kanban/producao/*`. Se aparecer HTTP 404 na tela, reinicie o backend local antes de considerar erro da UI.
 
-4) Página Produção (smoke)
-	- Verifique presença de KPIs (Total, Em andamento, Atrasados, Concluídos, Arquivados).
-	- Confirme que a lista de OPs é carregada.
+## Checklist principal
 
-5) Criar OP
-	- Abra o formulário de criar OP.
-	- Preencha `numero_op`, `quantidade`, `modelo` e clique em `Criar`.
-	- Verifique toast de sucesso e presença da nova OP na lista.
+| Passo | Resultado esperado | Status |
+| --- | --- | --- |
+| Abrir `http://127.0.0.1:5174/login` | Tela de login carrega | Pendente de execucao manual |
+| Entrar com `Admin` / `Vesper@890` | Login conclui e abre o Portal | Pendente de execucao manual |
+| Ver sidebar | Sidebar mostra `Kanban`, mas nao mostra `Kanban Producao` como item proprio | Pendente de execucao manual |
+| Abrir `Kanban` | Hub `/kanban` abre | Pendente de execucao manual |
+| Selecionar contexto `Producao` | Navega para `/kanban/producao` | Pendente de execucao manual |
+| Ver cabecalho | Titulo `Kanban Producao` e subtitulo aparecem sem quebra ruim | Pendente de execucao manual |
+| Ver KPIs | Cards Total, Abertas, Em andamento, Aguardando, Prontas e Arquivadas aparecem responsivos | Pendente de execucao manual |
+| Clicar `Nova OP` | Formulario abre sem overflow horizontal | Pendente de execucao manual |
+| Criar OP valida | OP e criada e drawer abre | Pendente de execucao manual |
+| Tentar criar OP sem numero | Erro inline aparece e formulario nao fecha | Pendente de execucao manual |
+| Abrir uma OP existente | Drawer abre com overlay e rolagem interna | Pendente de execucao manual |
+| Reduzir largura da tela | Drawer ocupa a largura disponivel sem cortar botoes | Pendente de execucao manual |
+| Tab `Resumo` | Dados principais e percentual aparecem claros | Pendente de execucao manual |
+| Clicar `Editar` | Formulario de edicao aparece com labels | Pendente de execucao manual |
+| Salvar edicao valida | Drawer continua aberto e dados atualizam | Pendente de execucao manual |
+| Forcar erro de salvar, se possivel | Erro inline aparece e drawer nao fecha | Pendente de execucao manual |
+| Clicar `Cancelar` | Sai da edicao sem quebrar layout | Pendente de execucao manual |
+| Tab `Checklist` | Itens aparecem ordenados e legiveis | Pendente de execucao manual |
+| Primeiro item | Botao subir esta desabilitado | Pendente de execucao manual |
+| Ultimo item | Botao descer esta desabilitado | Pendente de execucao manual |
+| Editar item inline | Formulario nao quebra o card nem cria overflow | Pendente de execucao manual |
+| Marcar/desmarcar item | Percentual atualiza apos resposta do servidor | Pendente de execucao manual |
+| Adicionar item | Item entra no final e percentual permanece coerente | Pendente de execucao manual |
+| Remover item | Browser pede confirmacao antes de remover | Pendente de execucao manual |
+| Reordenar item | Ordem muda e permanece correta apos refresh | Pendente de execucao manual |
+| Tab `Atividade` | Lista atividade ou mensagem vazia sem overflow | Pendente de execucao manual |
+| Arquivar OP | Botao muda para `Restaurar` e drawer continua aberto | Pendente de execucao manual |
+| Restaurar OP | Botao volta para `Arquivar` | Pendente de execucao manual |
+| Fechar drawer | Overlay e drawer somem | Pendente de execucao manual |
+| Preview TV/Foco lista | Lista e legivel para tela grande | Pendente de execucao manual |
+| Preview TV/Foco kanban | Agrupamento por coluna/status aparece sem overflow | Pendente de execucao manual |
+| Recarregar pagina | Estado persistido no backend continua correto | Pendente de execucao manual |
 
-6) Abrir Drawer de uma OP
-	- Clique em uma OP para abrir o `ProductionOrderDrawer`.
-	- Verifique cabeçalho (número OP, cliente, modelo) e botões (Editar, Arquivar/Restaurar, Fechar).
+## Responsividade
 
-7) Editar OP
-	- Clique em `Editar`, altere alguns campos (por ex. `cliente`, `observacoes`) e clique em `Salvar`.
-	- Verifique toast de sucesso e que os dados atualizados aparecem na lista/detalhe.
+Executar os mesmos fluxos nas larguras abaixo:
 
-8) Checklist
-	- Na seção `Checklist`, adicione um item novo e confirme que aparece na lista.
-	- Marque um item como concluído e verifique alteração visual (line-through) e percentual atualizado.
-	- Edite título/descrição inline (se disponível) e confirme persistência.
-	- Remova um item e confirme que some da lista.
+| Largura | O que observar | Status |
+| --- | --- | --- |
+| 1440px | Layout desktop com duas colunas e KPIs em linha | Pendente |
+| 1024px | Coluna lateral continua utilizavel | Pendente |
+| 768px | Lista, checklist e TV/Foco empilham sem overflow | Pendente |
+| 390px | Drawer ocupa tela inteira e botoes quebram corretamente | Pendente |
 
-9) Reordenar checklist
-	- Use os botões `↑` / `↓` para subir e descer um item.
-	- Confirme que a ordem muda imediatamente na UI e que o backend registra a nova ordem (via invalidation/refresh).
+## WebSocket e cache
 
-10) Arquivar / Restaurar
-	- No header do drawer, clique em `Arquivar` e confirme que OP desaparece da lista ativa (ou aparece em Arquivados).
-	- Abra uma OP arquivada e clique em `Restaurar` — confirme retorno ao estado ativo.
+| Validacao | Resultado esperado | Status |
+| --- | --- | --- |
+| Criar OP | Dashboard, lista e TV/Foco atualizam apos sucesso | Pendente |
+| Editar OP | Detalhe, lista, atividade e TV/Foco atualizam | Pendente |
+| Marcar checklist | Percentual atualiza no drawer e na lista | Pendente |
+| Reordenar checklist | Ordem persiste apos reload | Pendente |
+| Receber evento `kanban_producao.*` | Query invalidada com debounce, sem multiplas conexoes aparentes | Pendente |
 
-11) Atividade
-	- Na aba `Atividade`, verifique que ações recentes (criação, edição, checklist) aparecem em ordem cronológica.
+## Playwright
 
-12) TV / Foco
-	- Ative o preview TV/Foco disponível na página e confirme que a visualização mostra OPs conforme o layout de TV.
+O spec foi atualizado em:
 
-13) Loading / Empty / Error states
-	- Simule listas vazias (ou use um usuário sem OPs) e confirme mensagens de empty.
-	- Simule erro de backend (se possível) e verifique mensagem de erro exibida.
+```text
+e2e/playwright/tests/kanban_producao.spec.ts
+```
 
-14) Permissões
-	- Teste com um usuário sem `kanban_producao.view` e confirme que `Produção` não aparece no seletor.
+Execucao automatica ficou pendente porque `@playwright/test` nao esta instalado e nao ha script E2E no `package.json`.
 
-Resultado esperado
+Para habilitar futuramente:
 
-- Todos os itens descritos acima devem funcionar conforme indicado. Em validação local os flows principais (criar, editar, drawer, checklist, reordenação, arquivar/restaurar) funcionaram.
+```bash
+npm install -D @playwright/test
+npx playwright install
+npx playwright test e2e/playwright --project=chromium
+```
 
-Notas
+## Comandos automatizados executados nesta etapa
 
-- Se algum passo falhar com erro crítico (build, login, API, permissão), capture o console/Network e reportar.
-- Para automação E2E: ajustar credenciais e seletores em `e2e/playwright/tests/kanban_producao.spec.ts`.
+| Comando | Resultado |
+| --- | --- |
+| `npm run backend:test` | Passou: 25 testes |
+| `npm run build --workspace=apps/web` | Passou |
+| `npm run lint` | Passou |
+| `npm run typecheck` | Passou |
+| `npm ls @playwright/test --depth=0` | Confirmou Playwright nao instalado |
 
+## Pendencias
+
+- Executar este checklist manual apos reiniciar backend e frontend.
+- Configurar Playwright como dependencia/script se a equipe quiser E2E oficial no CI.
+- Validar visualmente em monitor de TV real antes de chamar o preview TV/Foco de pronto para uso operacional.

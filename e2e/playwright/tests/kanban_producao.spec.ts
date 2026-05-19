@@ -1,35 +1,61 @@
-import { test, expect } from '@playwright/test';
+import { expect, test } from "@playwright/test";
 
-test('smoke: kanban produção basic flows', async ({ page }) => {
-  // Adjust base URL and credentials as necessary
-  await page.goto('/login');
-  await page.fill('input[name="username"]', 'admin');
-  await page.fill('input[name="password"]', 'admin');
-  await page.click('button[type="submit"]');
-  await page.waitForURL('/');
+const baseUrl = process.env.E2E_BASE_URL ?? "http://127.0.0.1:5174";
+const adminUser = process.env.E2E_ADMIN_USERNAME ?? "Admin";
+const adminPassword = process.env.E2E_ADMIN_PASSWORD ?? "Vesper@890";
 
-  // Sidebar contains only Kanban (and not Kanban Produção)
-  await expect(page.locator('nav').locator('text=Kanban')).toBeVisible();
-  await expect(page.locator('nav').locator('text=Kanban Produção')).toHaveCount(0);
+test("smoke: Kanban Producao UI flow", async ({ page }) => {
+  const opNumber = `OP-E2E-${Date.now()}`;
 
-  // Open Kanban hub
-  await page.click('nav >> text=Kanban');
-  await page.waitForURL(/kanban/);
+  await page.goto(`${baseUrl}/login`);
+  await page.getByLabel("Username").fill(adminUser);
+  await page.getByLabel("Senha").fill(adminPassword);
+  await page.getByRole("button", { name: "Entrar" }).click();
+  await expect(page).toHaveURL(/\/$/);
 
-  // Select Produção context if available
-  const producaoOption = page.locator('select').locator('option', { hasText: 'Produção' });
-  if (await producaoOption.count() > 0) {
-    await page.selectOption('select', { label: 'Produção' });
-    await page.waitForURL('/kanban/producao');
+  const sidebar = page.getByRole("navigation");
+  await expect(sidebar.getByText(/^Kanban$/)).toBeVisible();
+  await expect(sidebar.getByText(/Kanban Producao/i)).toHaveCount(0);
 
-    // Wait for KPIs and list
-    await expect(page.locator('text=OPs')).toBeVisible();
+  await sidebar.getByText(/^Kanban$/).click();
+  await expect(page).toHaveURL(/\/kanban/);
+  await expect(page.getByRole("heading", { name: "Kanban" })).toBeVisible();
 
-    // Try to open first OP drawer if exists
-    const firstOpButton = page.locator('button', { hasText: 'OP' }).first();
-    if (await firstOpButton.count() > 0) {
-      await firstOpButton.click();
-      await expect(page.locator('text=Checklist')).toBeVisible();
-    }
+  await page.getByLabel("Contexto").selectOption({ label: "Producao" });
+  await expect(page).toHaveURL(/\/kanban\/producao/);
+  await expect(page.getByRole("heading", { name: "Kanban Producao" })).toBeVisible();
+
+  await page.getByRole("button", { name: /Nova OP/ }).click();
+  await page.getByLabel("Numero OP").fill(opNumber);
+  await page.getByLabel("Cliente").fill("Cliente E2E");
+  await page.getByLabel("Projeto").fill("Projeto E2E");
+  await page.getByLabel("Modelo").fill("Modelo E2E");
+  await page.getByRole("button", { name: "Criar OP" }).click();
+
+  const drawer = page.getByRole("dialog");
+  await expect(drawer).toBeVisible();
+  await expect(drawer.getByText(opNumber)).toBeVisible();
+
+  await drawer.getByRole("button", { name: /Editar/ }).click();
+  await drawer.getByLabel("Cliente").fill("Cliente E2E Editado");
+  await drawer.getByRole("button", { name: "Salvar" }).click();
+  await expect(drawer.getByText("Cliente E2E Editado")).toBeVisible();
+
+  await drawer.getByRole("button", { name: "Checklist" }).click();
+  const firstChecklist = drawer.getByRole("checkbox").first();
+  if ((await firstChecklist.count()) > 0) {
+    await firstChecklist.check();
   }
+
+  await drawer.getByRole("button", { name: /Arquivar/ }).click();
+  await expect(drawer.getByRole("button", { name: /Restaurar/ })).toBeVisible();
+  await drawer.getByRole("button", { name: /Restaurar/ }).click();
+  await expect(drawer.getByRole("button", { name: /Arquivar/ })).toBeVisible();
+
+  await drawer.getByRole("button", { name: "Fechar" }).click();
+  await expect(drawer).toHaveCount(0);
+
+  await expect(page.getByText("TV/Foco simples")).toBeVisible();
+  await page.getByRole("button", { name: "Kanban" }).last().click();
+  await expect(page.getByText(/Nenhum cartao disponivel|Aberta|Em andamento|Aguardando|Pronta|Arquivada/)).toBeVisible();
 });

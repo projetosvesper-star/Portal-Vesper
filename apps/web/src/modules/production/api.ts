@@ -2,6 +2,7 @@ import { apiRequest } from "../../shared/api/client";
 
 import type {
   CreateProductionOrderPayload,
+  ProductionActivity,
   ProductionChecklistItem,
   ProductionDashboard,
   ProductionOrder,
@@ -28,8 +29,8 @@ export async function getProductionDashboard() {
   return apiRequest<ProductionDashboard>("/api/kanban/producao/dashboard");
 }
 
-export async function getProductionTVPreview() {
-  return apiRequest<ProductionTVResponse>("/api/kanban/producao/tv?mode=list&limit=8&include_done=false");
+export async function getProductionTVPreview(mode: "list" | "kanban" = "list", limit = 8) {
+  return apiRequest<ProductionTVResponse>(`/api/kanban/producao/tv?mode=${mode}&limit=${limit}&include_done=false`);
 }
 
 export async function getProductionOrder(orderId: string) {
@@ -48,8 +49,6 @@ export async function restoreProductionOrder(orderId: string) {
   return apiRequest<ProductionOrder>(`/api/kanban/producao/ops/${orderId}/restore`, { method: "POST" });
 }
 
-import type { ProductionActivity } from "./types";
-
 export async function listProductionActivity(orderId: string) {
   return apiRequest<ProductionActivity[]>(`/api/kanban/producao/ops/${orderId}/activity`);
 }
@@ -65,7 +64,10 @@ export async function createProductionChecklistItem(orderId: string, title: stri
   });
 }
 
-export async function updateProductionChecklistItem(itemId: string, payload: Partial<Pick<ProductionChecklistItem, "title" | "is_done">>) {
+export async function updateProductionChecklistItem(
+  itemId: string,
+  payload: Partial<Pick<ProductionChecklistItem, "title" | "description" | "is_done" | "is_required" | "order_index">>,
+) {
   return apiRequest<ProductionChecklistItem>(`/api/kanban/producao/checklist/${itemId}`, {
     method: "PATCH",
     body: JSON.stringify(payload),
@@ -73,7 +75,7 @@ export async function updateProductionChecklistItem(itemId: string, payload: Par
 }
 
 export async function deleteProductionChecklistItem(itemId: string) {
-  return apiRequest(`/api/kanban/producao/checklist/${itemId}`, { method: "DELETE" });
+  return apiRequest<{ message: string }>(`/api/kanban/producao/checklist/${itemId}`, { method: "DELETE" });
 }
 
 export async function reorderProductionChecklistItems(orderId: string, items: { item_id: string; order_index: number }[]) {
