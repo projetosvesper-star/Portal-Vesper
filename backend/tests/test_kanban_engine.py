@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 import pytest
@@ -96,7 +97,7 @@ class FakeKanbanRepo:
         return card
 
     async def soft_delete_card(self, card: KanbanCard):
-        card.deleted_at = card.deleted_at or __import__("datetime").datetime.utcnow()
+        card.deleted_at = card.deleted_at or datetime.now(UTC)
         self.cards[card.id] = card
         return card
 
@@ -107,7 +108,7 @@ class FakeKanbanRepo:
         return log
 
     async def get_card_activity(self, card_id: UUID, limit: int = 50):
-        return [l for l in self.logs if l.card_id == card_id][:limit]
+        return [log for log in self.logs if log.card_id == card_id][:limit]
 
     # Checklist
     async def get_checklist_items(self, card_id: UUID):
@@ -145,7 +146,7 @@ class FakeKanbanRepo:
         return comment
 
     async def soft_delete_comment(self, comment: KanbanComment):
-        comment.deleted_at = comment.deleted_at or __import__("datetime").datetime.utcnow()
+        comment.deleted_at = comment.deleted_at or datetime.now(UTC)
         self.comments[comment.id] = comment
         return comment
 
@@ -186,7 +187,7 @@ def actor_admin() -> User:
 def test_list_boards_requires_login():
     with TestClient(app) as client:
         response = client.get("/api/kanban/boards")
-    assert response.status_code in {401, 403}
+    assert response.status_code == 401
 
 
 @pytest.mark.asyncio
@@ -299,8 +300,45 @@ async def test_move_card_updates_column_and_generates_activity_and_event(actor_a
 
     moved = await service.move_card(card.id, col_to.id, 2, actor_admin)
     assert moved.column_id == col_to.id
-    assert any(l.action == "card.moved" for l in repo.logs)
+    assert any(log.action == "card.moved" for log in repo.logs)
     assert any(e[0] == events.KANBAN_CARD_MOVED for e in emitted)
+
+
+@pytest.mark.asyncio
+async def test_move_card_reorders_within_same_column(actor_admin, monkeypatch):
+    repo = FakeKanbanRepo()
+    board = KanbanBoard(id=uuid4(), key="b", name="B", board_type="custom", is_active=True, is_archived=False, metadata_json={})
+    repo.boards[board.id] = board
+    col = KanbanColumn(id=uuid4(), board_id=board.id, name="C", order_index=1, is_done=False, is_active=True, metadata_json={})
+    repo.columns[col.id] = col
+
+    cards = [
+        KanbanCard(id=uuid4(), board_id=board.id, column_id=col.id, title="C0", priority="medium", order_index=0, is_archived=False, metadata_json={}),
+        KanbanCard(id=uuid4(), board_id=board.id, column_id=col.id, title="C1", priority="medium", order_index=1, is_archived=False, metadata_json={}),
+        KanbanCard(id=uuid4(), board_id=board.id, column_id=col.id, title="C2", priority="medium", order_index=2, is_archived=False, metadata_json={}),
+    ]
+    for c in cards:
+        repo.cards[c.id] = c
+
+    async def fake_publish(*_a, **_k):
+        return None
+
+    async def fake_audit(*_a, **_k):
+        return None
+
+    monkeypatch.setattr(events, "publish_kanban_event", fake_publish)
+    monkeypatch.setattr("app.modules.kanban.service.write_audit_log", fake_audit)
+    service = KanbanService(session=None, repo=repo)  # type: ignore[arg-type]
+
+    moved = await service.move_card(cards[2].id, col.id, 0, actor_admin)
+    assert moved.column_id == col.id
+    assert moved.order_index == 0
+
+    # ordem deve ficar normalizada 0..n-1
+    reordered = [c for c in repo.cards.values() if c.column_id == col.id and c.deleted_at is None]
+    reordered.sort(key=lambda x: x.order_index)
+    assert [c.title for c in reordered] == ["C2", "C0", "C1"]
+    assert [c.order_index for c in reordered] == [0, 1, 2]
 
 
 @pytest.mark.asyncio

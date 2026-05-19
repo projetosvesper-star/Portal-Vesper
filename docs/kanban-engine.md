@@ -148,10 +148,60 @@ O **Kanban Engine** possui apenas campos genericos e metadados (`metadata` JSONB
 
 Campos industriais, regras de OP, integracao com ordens, estoques, etc. devem ficar em tabelas futuras (ex.: `production_orders`) e se relacionar ao Kanban via `card_id`/`code`/relacionamentos, sem poluir `kanban_cards`.
 
+## UI do Kanban Engine
+
+Nesta etapa a UI do **Kanban Engine** foi implementada no Portal Vesper consumindo os endpoints reais do backend.
+
+### Telas / rotas
+
+- `/kanban` (redireciona para um board default quando existir)
+- `/kanban/:boardId`
+
+Regra de abertura:
+- ao acessar `/kanban`, a UI lista boards disponiveis e tenta abrir o board com `key="producao"`; se nao existir, abre o primeiro board; se nao houver boards, mostra EmptyState.
+
+### Componentes principais
+
+- `KanbanEnginePage`: pagina principal (header, KPIs, toolbar, board, drawer e dialog).
+- `BoardSelector`: seletor de board.
+- `BoardToolbar`: filtro de busca + toggle de arquivados + refresh.
+- `KanbanBoard` / `KanbanColumn` / `KanbanCard`: renderizacao do board com colunas horizontais e cards por coluna.
+- `CardDetailDrawer`: drawer a direita com detalhes e abas (checklist, comentarios, atividade).
+- `CardFormDialog`: modal para criar/editar card.
+- `ChecklistPanel`, `CommentsPanel`, `ActivityPanel`.
+
+### Drag-and-drop
+
+- Implementado com **dnd kit**.
+- Arrastar cards entre colunas chama `POST /api/kanban/cards/{card_id}/move` com:
+  - `to_column_id`
+  - `new_order_index`
+- Respeita permissao `kanban.card.move` (arraste desabilitado sem permissao).
+- UI faz update otimista simples e refetch em seguida para consistencia.
+
+### WebSocket (eventos)
+
+- Reutiliza o WebSocket autenticado do Portal.
+- Ao receber eventos `kanban.*`, a UI invalida/refaz queries relacionadas (boards/columns/cards e, quando aplicavel, card/checklist/comments/activity).
+
+### Permissoes na UI
+
+A UI oculta/desabilita acoes conforme as permissoes do usuario (ex.: `kanban.card.create`, `kanban.card.edit`, `kanban.card.archive`, `kanban.card.restore`, `kanban.card.checklist`, `kanban.card.comment`, `kanban.activity.view`).
+
+## Polimento da UI do Kanban Engine
+
+Esta etapa fortalece o Kanban Engine **generico** (sem regras de Producao/Projetos), com foco em UX, ordenacao e integracoes:
+
+- **Reordenacao precisa dentro da mesma coluna**: drag-and-drop agora permite reorganizar cards na coluna atual, chamando o mesmo endpoint `POST /api/kanban/cards/{card_id}/move` com `to_column_id` + `new_order_index`.
+- **Normalizacao de order_index no backend**: ao mover/reordenar cards, a ordem da coluna (ou colunas afetadas) e normalizada para evitar buracos/duplicados.
+- **UserPicker (responsavel)**: seleção de responsavel com usuarios reais via endpoints seguros de lookup/search (`/api/users/search` e `/api/users/lookup`).
+- **AttachmentsPanel**: upload via `/api/files/upload` (MinIO/StorageService) e vinculacao ao card via `/api/kanban/cards/{card_id}/attachments`.
+- **Feedback visual**: skeleton de carregamento do board e toasts (sucesso/erro) nas principais acoes.
+- **WebSocket**: eventos `kanban.*` continuam invalidando queries, com debounce para evitar refetch excessivo.
+
 ## Proximos passos
 
-- UI completa do Kanban (drag-and-drop, colunas, cards, filtros).
+- Refinar reordenacao dentro da mesma coluna (melhor indicador de drop e comportamento em listas longas).
 - Regras mais fortes de ordenacao/reorder (shifts e consistencia de order_index).
 - Enforcar permissoes por quadro (`kanban_board_permissions`) e sharing.
 - Especializacoes (Producao, Projetos, Operacional) com tabelas dedicadas.
-

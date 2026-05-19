@@ -15,7 +15,7 @@ from app.core.database import get_session
 from app.core.security import decode_access_token
 from app.models import Permission, PortalModule, RolePermission, User, UserPermission, UserRole
 
-bearer_scheme = HTTPBearer(auto_error=True)
+bearer_scheme = HTTPBearer(auto_error=False)
 optional_bearer_scheme = HTTPBearer(auto_error=False)
 
 
@@ -28,9 +28,12 @@ def unauthorized(detail: str = "Credenciais invalidas ou expiradas") -> HTTPExce
 
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     session: AsyncSession = Depends(get_session),
 ) -> User:
+    if credentials is None:
+        raise unauthorized("Credenciais ausentes")
+
     settings = get_settings()
     try:
         payload = decode_access_token(

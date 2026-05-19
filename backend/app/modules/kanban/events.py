@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from typing import Any
+from uuid import UUID
 
 from app.core.redis import STREAM_MODULE_EVENTS, add_stream_event, publish_module, publish_user
 

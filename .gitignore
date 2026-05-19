@@ -11,9 +11,12 @@ out/
 .nuxt/
 target/
 apps/web/dist/
+apps/web/tsconfig.tsbuildinfo
 
 # Environment - never commit
 .env
+.env.*
+!.env.example
 .env.local
 .env.development.local
 .env.test.local
@@ -33,6 +36,7 @@ env/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.cache/
 
 # Local databases
 *.db
@@ -74,3 +78,8 @@ apps/desktop/src-tauri/target/
 
 # MinIO local data
 infra/minio/data/
+
+# Local runtime files
+uploads/
+tmp/
+temp/

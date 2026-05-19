@@ -3,31 +3,38 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import TypeVar
 from uuid import UUID
-from typing import Any
 
-from sqlalchemy import select, and_, or_, func
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.modules.kanban.models import (
-    KanbanBoard,
-    KanbanColumn,
-    KanbanCard,
-    KanbanCardType,
-    KanbanCardAssignee,
-    KanbanChecklistItem,
-    KanbanComment,
-    KanbanAttachment,
-    KanbanActivityLog,
-    KanbanBoardPermission,
-)
 from app.models import File as StoredFile
+from app.modules.kanban.models import (
+    KanbanActivityLog,
+    KanbanAttachment,
+    KanbanBoard,
+    KanbanBoardPermission,
+    KanbanCard,
+    KanbanCardAssignee,
+    KanbanCardType,
+    KanbanChecklistItem,
+    KanbanColumn,
+    KanbanComment,
+)
+
+T = TypeVar("T")
 
 
 class KanbanRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
+
+    async def _flush_refresh(self, entity: T) -> T:
+        await self.session.flush()
+        await self.session.refresh(entity)
+        return entity
 
     # Board operations
     async def get_board(self, board_id: UUID) -> KanbanBoard | None:
@@ -49,7 +56,7 @@ class KanbanRepository:
         offset: int = 0,
     ) -> list[KanbanBoard]:
         query = select(KanbanBoard)
-        
+
         conditions = []
         if board_type is not None:
             conditions.append(KanbanBoard.board_type == board_type)
@@ -59,10 +66,10 @@ class KanbanRepository:
             conditions.append(KanbanBoard.is_active == is_active)
         if is_archived is not None:
             conditions.append(KanbanBoard.is_archived == is_archived)
-        
+
         if conditions:
             query = query.where(and_(*conditions))
-        
+
         query = query.order_by(KanbanBoard.created_at.desc()).limit(limit).offset(offset)
         result = await self.session.execute(query)
         return list(result.scalars().all())
@@ -73,13 +80,11 @@ class KanbanRepository:
         return board
 
     async def update_board(self, board: KanbanBoard) -> KanbanBoard:
-        await self.session.flush()
-        return board
+        return await self._flush_refresh(board)
 
     async def archive_board(self, board: KanbanBoard) -> KanbanBoard:
         board.is_archived = True
-        await self.session.flush()
-        return board
+        return await self._flush_refresh(board)
 
     async def delete_board(self, board: KanbanBoard) -> None:
         await self.session.delete(board)
@@ -94,10 +99,10 @@ class KanbanRepository:
         is_active: bool | None = None,
     ) -> list[KanbanColumn]:
         query = select(KanbanColumn).where(KanbanColumn.board_id == board_id)
-        
+
         if is_active is not None:
             query = query.where(KanbanColumn.is_active == is_active)
-        
+
         query = query.order_by(KanbanColumn.order_index)
         result = await self.session.execute(query)
         return list(result.scalars().all())
@@ -108,8 +113,7 @@ class KanbanRepository:
         return column
 
     async def update_column(self, column: KanbanColumn) -> KanbanColumn:
-        await self.session.flush()
-        return column
+        return await self._flush_refresh(column)
 
     async def delete_column(self, column: KanbanColumn) -> None:
         await self.session.delete(column)
@@ -130,16 +134,16 @@ class KanbanRepository:
         is_active: bool | None = None,
     ) -> list[KanbanCardType]:
         query = select(KanbanCardType)
-        
+
         conditions = []
         if board_id is not None:
             conditions.append(KanbanCardType.board_id == board_id)
         if is_active is not None:
             conditions.append(KanbanCardType.is_active == is_active)
-        
+
         if conditions:
             query = query.where(and_(*conditions))
-        
+
         query = query.order_by(KanbanCardType.name)
         result = await self.session.execute(query)
         return list(result.scalars().all())
@@ -150,8 +154,7 @@ class KanbanRepository:
         return card_type
 
     async def update_card_type(self, card_type: KanbanCardType) -> KanbanCardType:
-        await self.session.flush()
-        return card_type
+        return await self._flush_refresh(card_type)
 
     # Card operations
     async def get_card(self, card_id: UUID) -> KanbanCard | None:
@@ -181,7 +184,7 @@ class KanbanRepository:
         offset: int = 0,
     ) -> list[KanbanCard]:
         query = select(KanbanCard).where(KanbanCard.board_id == board_id)
-        
+
         conditions = []
         if column_id is not None:
             conditions.append(KanbanCard.column_id == column_id)
@@ -191,12 +194,12 @@ class KanbanRepository:
             conditions.append(KanbanCard.is_archived == is_archived)
         if priority is not None:
             conditions.append(KanbanCard.priority == priority)
-        
+
         conditions.append(KanbanCard.deleted_at.is_(None))
-        
+
         if conditions:
             query = query.where(and_(*conditions))
-        
+
         query = query.order_by(KanbanCard.order_index, KanbanCard.created_at.desc()).limit(limit).offset(offset)
         result = await self.session.execute(query)
         return list(result.scalars().all())
@@ -207,24 +210,20 @@ class KanbanRepository:
         return card
 
     async def update_card(self, card: KanbanCard) -> KanbanCard:
-        await self.session.flush()
-        return card
+        return await self._flush_refresh(card)
 
     async def archive_card(self, card: KanbanCard) -> KanbanCard:
         card.is_archived = True
-        await self.session.flush()
-        return card
+        return await self._flush_refresh(card)
 
     async def restore_card(self, card: KanbanCard) -> KanbanCard:
         card.is_archived = False
         card.archived_at = None
-        await self.session.flush()
-        return card
+        return await self._flush_refresh(card)
 
     async def soft_delete_card(self, card: KanbanCard) -> KanbanCard:
         card.deleted_at = datetime.now(UTC)
-        await self.session.flush()
-        return card
+        return await self._flush_refresh(card)
 
     async def delete_card(self, card: KanbanCard) -> None:
         await self.session.delete(card)
@@ -276,8 +275,7 @@ class KanbanRepository:
         return item
 
     async def update_checklist_item(self, item: KanbanChecklistItem) -> KanbanChecklistItem:
-        await self.session.flush()
-        return item
+        return await self._flush_refresh(item)
 
     async def delete_checklist_item(self, item: KanbanChecklistItem) -> None:
         await self.session.delete(item)
@@ -300,13 +298,11 @@ class KanbanRepository:
         return comment
 
     async def update_comment(self, comment: KanbanComment) -> KanbanComment:
-        await self.session.flush()
-        return comment
+        return await self._flush_refresh(comment)
 
     async def soft_delete_comment(self, comment: KanbanComment) -> KanbanComment:
         comment.deleted_at = datetime.now(UTC)
-        await self.session.flush()
-        return comment
+        return await self._flush_refresh(comment)
 
     # Attachment operations
     async def get_attachments(self, card_id: UUID) -> list[KanbanAttachment]:

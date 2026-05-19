@@ -21,7 +21,7 @@ const router = createBrowserRouter([
           { index: true, element: <DashboardPage /> },
           { path: "admin", element: <ProtectedModuleRoute moduleKey="admin"><AdminPage /></ProtectedModuleRoute> },
           { path: "chat", element: <ProtectedModuleRoute moduleKey="chat"><PlaceholderPage title="Chat Interno" description="Comunicacao interna em tempo real para equipes e setores." /></ProtectedModuleRoute> },
-          { path: "kanban", element: <ProtectedModuleRoute moduleKey="kanban"><KanbanEnginePage /></ProtectedModuleRoute> },
+          { path: "kanban/:boardId?", element: <ProtectedModuleRoute moduleKey="kanban"><KanbanEnginePage /></ProtectedModuleRoute> },
           { path: "propostas", element: <ProtectedModuleRoute moduleKey="propostas"><PlaceholderPage title="Propostas" description="Base para criacao, aprovacao e gestao de propostas comerciais." /></ProtectedModuleRoute> },
           { path: "compras", element: <ProtectedModuleRoute moduleKey="compras"><PlaceholderPage title="Compras" description="Base para cotacoes, solicitacoes e gestao de compras." /></ProtectedModuleRoute> },
           { path: "helpdesk", element: <ProtectedModuleRoute moduleKey="helpdesk"><PlaceholderPage title="HelpDesk TI" description="Base para tickets de suporte e atendimento interno." /></ProtectedModuleRoute> },

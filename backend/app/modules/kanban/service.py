@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import UUID
 
-from fastapi import HTTPException, status
+from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import write_audit_log
@@ -396,11 +396,57 @@ class KanbanService:
         if dest.board_id != card.board_id:
             raise HTTPException(status_code=400, detail="Coluna de destino pertence a outro quadro")
 
+        def _sort_cards_for_ordering(cards: list[KanbanCard]) -> list[KanbanCard]:
+            # O repo lista por (order_index, created_at desc), mas mantemos um sort defensivo
+            # pois o FakeRepo de testes nao garante ordenacao.
+            def key(c: KanbanCard):
+                created_at = getattr(c, "created_at", None)
+                created_ts = created_at.timestamp() if created_at else 0
+                return (c.order_index, -created_ts)
+
+            return sorted(cards, key=key)
+
+        async def _normalize_column(_board_id: UUID, _column_id: UUID, cards: list[KanbanCard]) -> None:
+            # Normaliza order_index para evitar buracos/duplicados.
+            # IMPORTANTE: a lista recebida já deve estar na ordem final desejada.
+            for idx, c in enumerate(cards):
+                c.order_index = idx
+            for c in cards:
+                await self.repo.update_card(c)
+
         old_column_id = card.column_id
         old_order_index = card.order_index
-        card.column_id = dest.id
-        card.order_index = new_order_index
-        await self.repo.update_card(card)
+
+        # Move + normaliza ordem (suporta mover dentro da mesma coluna).
+        if old_column_id == dest.id:
+            column_cards = await self.repo.list_cards(board_id=card.board_id, column_id=dest.id, limit=200, offset=0)
+            column_cards = _sort_cards_for_ordering(column_cards)
+            current_index = next((i for i, c in enumerate(column_cards) if c.id == card.id), None)
+            if current_index is None:
+                # fallback: inclui o card na lista
+                column_cards.append(card)
+                current_index = len(column_cards) - 1
+
+            moving = column_cards.pop(current_index)
+            target_index = max(0, min(int(new_order_index), len(column_cards)))
+            column_cards.insert(target_index, moving)
+
+            await _normalize_column(card.board_id, dest.id, column_cards)
+            new_order_index = next((i for i, c in enumerate(column_cards) if c.id == card.id), target_index)
+        else:
+            # Remove do source e insere no destino na posicao pedida.
+            source_cards = await self.repo.list_cards(board_id=card.board_id, column_id=old_column_id, limit=200, offset=0)
+            dest_cards = await self.repo.list_cards(board_id=card.board_id, column_id=dest.id, limit=200, offset=0)
+            source_cards = _sort_cards_for_ordering([c for c in source_cards if c.id != card.id])
+            dest_cards = _sort_cards_for_ordering(dest_cards)
+
+            card.column_id = dest.id
+            target_index = max(0, min(int(new_order_index), len(dest_cards)))
+            dest_cards.insert(target_index, card)
+
+            await _normalize_column(card.board_id, old_column_id, source_cards)
+            await _normalize_column(card.board_id, dest.id, dest_cards)
+            new_order_index = next((i for i, c in enumerate(dest_cards) if c.id == card.id), target_index)
 
         await self._activity(
             "card.moved",

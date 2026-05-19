@@ -31,7 +31,13 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
-    CORS_ORIGINS: str = "http://localhost:5173,http://localhost:1420,tauri://localhost"
+    # Em desenvolvimento, é comum o Vite rodar em localhost ou 127.0.0.1 (origens diferentes).
+    # Mantemos defaults seguros, e bloqueamos '*' em produção via validator.
+    CORS_ORIGINS: str = (
+        "http://localhost:5173,http://127.0.0.1:5173,"
+        "http://localhost:5174,http://127.0.0.1:5174,"
+        "http://localhost:1420,tauri://localhost"
+    )
     MAX_UPLOAD_SIZE_MB: int = 25
     ALLOWED_UPLOAD_CONTENT_TYPES: str = (
         "application/pdf,image/png,image/jpeg,image/webp,text/plain,text/csv,"

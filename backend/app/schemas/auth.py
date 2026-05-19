@@ -21,6 +21,20 @@ class UserRead(BaseModel):
     last_login_at: datetime | None = None
 
 
+class UserLookupRead(BaseModel):
+    """Schema enxuto para lookup/search de usuarios (para UIs como Kanban)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    username: str
+    name: str
+    avatar_url: str | None = None
+    department: str | None = None
+    job_title: str | None = None
+    status: str
+
+
 class LoginRequest(BaseModel):
     username: str = Field(min_length=1, max_length=80)
     password: str = Field(min_length=1)
