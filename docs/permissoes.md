@@ -41,3 +41,25 @@ As permissoes do Kanban Engine seguem o padrao `kanban.*` e sao granulares por r
 - `kanban.admin`
 
 Referencia completa (inclui descricao de cada chave): `backend/app/modules/kanban/permissions.py` e `docs/kanban-engine.md`.
+
+## Permissoes Kanban Producao
+
+O Kanban Producao usa `kanban_producao.*` e protege OPs, checklist, templates, TV/Foco e historico:
+
+- `kanban_producao.view`
+- `kanban_producao.op.view`
+- `kanban_producao.op.create`
+- `kanban_producao.op.edit`
+- `kanban_producao.op.archive`
+- `kanban_producao.op.restore`
+- `kanban_producao.op.delete`
+- `kanban_producao.op.move`
+- `kanban_producao.checklist.view`
+- `kanban_producao.checklist.edit`
+- `kanban_producao.templates.view`
+- `kanban_producao.templates.manage`
+- `kanban_producao.tv.view`
+- `kanban_producao.history.view`
+- `kanban_producao.admin`
+
+Administrador recebe todas. Gestor recebe permissao operacional ampla. Producao recebe criacao/edicao/movimento/checklist/TV. Usuario recebe somente visualizacao basica, checklist view e TV.

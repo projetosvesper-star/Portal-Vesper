@@ -38,3 +38,11 @@ O **Kanban Engine** e o primeiro modulo com implementacao real no backend, proje
 - Quadros personalizados.
 
 Documentacao completa: `docs/kanban-engine.md`.
+
+## Kanban Producao
+
+O **Kanban Producao** e um modulo especifico sobre o Kanban Engine. Ele registra o modulo `kanban_producao`, rota `/kanban/producao`, icone `Factory` e permissoes `kanban_producao.*`.
+
+Ele nao adiciona campos industriais diretamente em `kanban_cards`; a entidade especifica e `production_orders`, ligada ao card por `production_orders.card_id`.
+
+Documentacao completa: `docs/kanban-producao.md`.

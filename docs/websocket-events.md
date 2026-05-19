@@ -17,6 +17,7 @@ Eventos base:
 - `admin.module.updated`
 - `file.uploaded`
 - `kanban.*` (Kanban Engine)
+- `kanban_producao.*` (Kanban Producao)
 
 Formato recomendado:
 
@@ -70,6 +71,34 @@ Eventos publicados:
 - `kanban.checklist.updated`
 - `kanban.attachment.created`
 - `kanban.attachment.deleted`
+
+## Eventos Kanban Producao
+
+Canal por modulo:
+
+- `ws:module:kanban_producao`
+
+Stream:
+
+- `stream:module_events` (campo `module_key=kanban_producao`)
+
+Eventos publicados:
+
+- `kanban_producao.op.created`
+- `kanban_producao.op.updated`
+- `kanban_producao.op.archived`
+- `kanban_producao.op.restored`
+- `kanban_producao.op.deleted`
+- `kanban_producao.checklist.item.created`
+- `kanban_producao.checklist.item.updated`
+- `kanban_producao.checklist.item.deleted`
+- `kanban_producao.checklist.reordered`
+- `kanban_producao.template.created`
+- `kanban_producao.template.updated`
+- `kanban_producao.template.deleted`
+- `kanban_producao.tv.updated`
+
+Quando a OP altera o card generico vinculado, tambem e emitido evento em `ws:module:kanban`.
 
 ## Heartbeat
 

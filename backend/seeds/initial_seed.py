@@ -1,6 +1,7 @@
 """Initial development seed for Portal Vesper."""
 
 import asyncio
+from datetime import date
 
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -11,10 +12,30 @@ from app.core.security import hash_password
 from app.models import ModulePermission, Permission, PortalModule, Role, User
 from app.modules.kanban.models import KanbanBoard, KanbanCard, KanbanCardType, KanbanColumn
 from app.modules.kanban.permissions import KANBAN_PERMISSION_DEFINITIONS
+from app.modules.production.models import (
+    ProductionChecklistTemplate,
+    ProductionChecklistTemplateItem,
+    ProductionOrder,
+    ProductionOrderChecklistItem,
+)
+from app.modules.production.permissions import (
+    GESTOR_PRODUCAO_PERMISSIONS,
+    KANBAN_PRODUCAO_PERMISSION_DEFINITIONS,
+    PRODUCAO_ROLE_PERMISSIONS,
+    USUARIO_PRODUCAO_PERMISSIONS,
+)
 
 MODULES = [
     {"key": "chat", "name": "Chat Interno", "description": "Comunicacao interna em tempo real.", "route": "/chat", "icon": "MessageCircle", "order_index": 10},
     {"key": "kanban", "name": "Kanban", "description": "Quadros de producao, operacao e projetos.", "route": "/kanban", "icon": "KanbanSquare", "order_index": 20},
+    {
+        "key": "kanban_producao",
+        "name": "Kanban Producao",
+        "description": "Controle simples de Ordens de Producao com checklist editavel e visao TV/Foco.",
+        "route": "/kanban/producao",
+        "icon": "Factory",
+        "order_index": 25,
+    },
     {"key": "propostas", "name": "Propostas", "description": "Gestao de propostas comerciais.", "route": "/propostas", "icon": "FileText", "order_index": 30},
     {"key": "compras", "name": "Compras", "description": "Cotacoes e gestao de compras.", "route": "/compras", "icon": "ShoppingCart", "order_index": 40},
     {"key": "helpdesk", "name": "HelpDesk TI", "description": "Tickets de suporte interno.", "route": "/helpdesk", "icon": "Headphones", "order_index": 50},
@@ -57,7 +78,7 @@ PERMISSIONS = [
     ("automacoes_n8n.view", "Ver automacoes n8n", "automacoes_n8n"),
     ("automacoes_n8n.status.view", "Ver status n8n", "automacoes_n8n"),
     ("system.notifications.view", "Ver notificacoes", None),
-] + KANBAN_PERMISSION_DEFINITIONS
+] + KANBAN_PERMISSION_DEFINITIONS + KANBAN_PRODUCAO_PERMISSION_DEFINITIONS
 
 ROLE_PERMISSION_KEYS = {
     "administrador": [key for key, _, _ in PERMISSIONS],
@@ -85,6 +106,7 @@ ROLE_PERMISSION_KEYS = {
         "helpdesk.ticket.view",
         "atalhos.view",
         "system.notifications.view",
+        *GESTOR_PRODUCAO_PERMISSIONS,
     ],
     "producao": [
         "chat.view",
@@ -103,6 +125,7 @@ ROLE_PERMISSION_KEYS = {
         "helpdesk.view",
         "helpdesk.ticket.create",
         "system.notifications.view",
+        *PRODUCAO_ROLE_PERMISSIONS,
     ],
     "comercial": [
         "chat.view",
@@ -151,6 +174,7 @@ ROLE_PERMISSION_KEYS = {
         "helpdesk.view",
         "helpdesk.ticket.create",
         "system.notifications.view",
+        *USUARIO_PRODUCAO_PERMISSIONS,
     ],
 }
 
@@ -297,6 +321,181 @@ async def run() -> None:
                                 created_by=admin.id,
                                 assigned_to=None,
                                 is_archived=False,
+                                metadata_json={},
+                            )
+                        )
+
+            production_board = await session.scalar(select(KanbanBoard).where(KanbanBoard.key == "kanban_producao"))
+            if production_board is None:
+                production_board = KanbanBoard(
+                    key="kanban_producao",
+                    name="Kanban Producao",
+                    description="Controle simples de Ordens de Producao.",
+                    board_type="production",
+                    module_context="producao",
+                    icon="Factory",
+                    is_active=True,
+                    is_archived=False,
+                    created_by=admin.id,
+                    metadata_json={"production_type": "simple"},
+                )
+                session.add(production_board)
+                await session.flush()
+
+            production_columns = [
+                ("aberta", "Aberta", 0, False),
+                ("em_andamento", "Em andamento", 1, False),
+                ("aguardando", "Aguardando", 2, False),
+                ("pronta", "Pronta", 3, True),
+                ("arquivada", "Arquivada", 4, True),
+            ]
+            for key, name, order_index, is_done in production_columns:
+                column = await session.scalar(
+                    select(KanbanColumn).where(KanbanColumn.board_id == production_board.id, KanbanColumn.key == key)
+                )
+                if column is None:
+                    session.add(
+                        KanbanColumn(
+                            board_id=production_board.id,
+                            key=key,
+                            name=name,
+                            order_index=order_index,
+                            is_done=is_done,
+                            is_active=True,
+                            metadata_json={"production_status": key},
+                        )
+                    )
+            await session.flush()
+
+            template_defs = [
+                (
+                    "Checklist Producao Basico",
+                    "producao",
+                    True,
+                    [
+                        "Conferir desenho",
+                        "Separar materiais",
+                        "Producao/Fabricacao",
+                        "Pintura/Acabamento",
+                        "Montagem",
+                        "Inspecao final",
+                    ],
+                ),
+                (
+                    "Checklist Projeto Basico",
+                    "projeto",
+                    False,
+                    [
+                        "Levantamento inicial",
+                        "Definicao de escopo",
+                        "Aprovacao interna",
+                        "Execucao",
+                        "Revisao",
+                        "Entrega",
+                    ],
+                ),
+            ]
+            templates_by_name: dict[str, ProductionChecklistTemplate] = {}
+            for name, template_type, is_default, item_titles in template_defs:
+                template = await session.scalar(select(ProductionChecklistTemplate).where(ProductionChecklistTemplate.name == name))
+                if template is None:
+                    template = ProductionChecklistTemplate(
+                        name=name,
+                        description="Template inicial editavel de desenvolvimento.",
+                        template_type=template_type,
+                        is_default=is_default,
+                        is_active=True,
+                        created_by=admin.id,
+                        metadata_json={},
+                    )
+                    session.add(template)
+                    await session.flush()
+                template.is_default = is_default
+                template.is_active = True
+                templates_by_name[name] = template
+                for idx, title in enumerate(item_titles):
+                    item = await session.scalar(
+                        select(ProductionChecklistTemplateItem).where(
+                            ProductionChecklistTemplateItem.template_id == template.id,
+                            ProductionChecklistTemplateItem.order_index == idx,
+                        )
+                    )
+                    if item is None:
+                        session.add(
+                            ProductionChecklistTemplateItem(
+                                template_id=template.id,
+                                title=title,
+                                order_index=idx,
+                                is_required=False,
+                                metadata_json={},
+                            )
+                        )
+            await session.flush()
+
+            aberta_column = await session.scalar(
+                select(KanbanColumn).where(KanbanColumn.board_id == production_board.id, KanbanColumn.key == "aberta")
+            )
+            default_template = templates_by_name.get("Checklist Producao Basico")
+            sample_ops = [
+                ("OP-2026-0001", "Cliente Demonstracao A", "Projeto Alpha", "Modelo A", 10, "Fabricacao"),
+                ("OP-2026-0002", "Cliente Demonstracao B", "Projeto Beta", "Modelo B", 5, "Montagem"),
+                ("OP-2026-0003", "Cliente Demonstracao C", "Projeto Gamma", "Modelo C", 2, "Acabamento"),
+            ]
+            if aberta_column and default_template:
+                template_items = (
+                    await session.execute(
+                        select(ProductionChecklistTemplateItem)
+                        .where(ProductionChecklistTemplateItem.template_id == default_template.id)
+                        .order_by(ProductionChecklistTemplateItem.order_index)
+                    )
+                ).scalars().all()
+                for idx, (numero_op, cliente, projeto, modelo, quantidade, setor) in enumerate(sample_ops, start=1):
+                    existing_op = await session.scalar(select(ProductionOrder).where(ProductionOrder.numero_op == numero_op))
+                    if existing_op is not None:
+                        continue
+                    card = KanbanCard(
+                        board_id=production_board.id,
+                        column_id=aberta_column.id,
+                        title=f"{numero_op} - {cliente} - {projeto} - {modelo}",
+                        code=numero_op,
+                        priority="medium",
+                        status="aberta",
+                        order_index=idx,
+                        due_date=None,
+                        created_by=admin.id,
+                        is_archived=False,
+                        metadata_json={"production_type": "simple"},
+                    )
+                    session.add(card)
+                    await session.flush()
+                    op = ProductionOrder(
+                        card_id=card.id,
+                        board_id=production_board.id,
+                        numero_op=numero_op,
+                        cliente=cliente,
+                        projeto=projeto,
+                        modelo=modelo,
+                        quantidade=quantidade,
+                        setor=setor,
+                        data_inicio=date(2026, 5, 19),
+                        data_entrega=None,
+                        prioridade="normal",
+                        status="aberta",
+                        created_by=admin.id,
+                        updated_by=admin.id,
+                        metadata_json={"seed": True},
+                    )
+                    session.add(op)
+                    await session.flush()
+                    card.metadata_json = {"production_type": "simple", "production_order_id": str(op.id), "percentual_checklist": 0}
+                    for template_item in template_items:
+                        session.add(
+                            ProductionOrderChecklistItem(
+                                production_order_id=op.id,
+                                title=template_item.title,
+                                description=template_item.description,
+                                order_index=template_item.order_index,
+                                is_required=template_item.is_required,
                                 metadata_json={},
                             )
                         )

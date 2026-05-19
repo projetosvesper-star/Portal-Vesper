@@ -1,5 +1,6 @@
 import {
   FileText,
+  Factory,
   Headphones,
   KanbanSquare,
   Link,
@@ -14,6 +15,7 @@ import {
 
 export const iconMap: Record<string, LucideIcon> = {
   MessageCircle,
+  Factory,
   KanbanSquare,
   FileText,
   ShoppingCart,

@@ -36,3 +36,11 @@ Cada modulo deve ter pasta propria no backend e no frontend, permissao `modulo.v
 O Kanban Engine e um **motor unico e generico** de quadros/colunas/cards. Ele sera reutilizado por contextos diferentes (producao, projetos, operacional, helpdesk e quadros customizados) sem duplicar codigo nem criar campos industriais diretamente em `kanban_cards`.
 
 Detalhes: `docs/kanban-engine.md`.
+
+## Kanban Producao
+
+O Kanban Producao e uma camada especifica de dominio sobre o Kanban Engine. A OP fica em `production_orders` e referencia um card generico por `card_id`, preservando o motor reutilizavel.
+
+Nesta primeira fundacao foram adicionados OP simples, checklist editavel por OP, templates de checklist, TV/Foco simples e eventos `kanban_producao.*`. Recursos avancados como risco, alertas, OCR, Telegram e automacoes ficam para fases futuras.
+
+Detalhes: `docs/kanban-producao.md`.

@@ -2,7 +2,7 @@
 
 Portal Vesper e um aplicativo desktop empresarial para unificar sistemas internos em uma unica fundacao modular. A base usa Tauri 2.0 no desktop, React no frontend, FastAPI no backend, PostgreSQL como banco central, Redis para cache/eventos e MinIO para arquivos.
 
-Nesta etapa foram criados somente os blocos arquiteturais. Kanban, Chat, Propostas, Compras, HelpDesk, Controle TI, IA e n8n ainda existem apenas como registros e placeholders.
+O Portal ja possui a base arquitetural, o Kanban Engine generico e uma fundacao simples do Kanban Producao. Chat, Propostas, Compras, HelpDesk, Controle TI, IA e n8n ainda existem apenas como registros e placeholders.
 
 ## Stack
 
@@ -159,3 +159,17 @@ PortalVesper/
 - `docs/storage.md`
 - `docs/setup-dev.md`
 - `docs/deploy-servidor.md`
+- `docs/kanban-engine.md`
+- `docs/kanban-producao.md`
+
+## Kanban Producao simples
+
+A rota `/kanban/producao` implementa uma primeira fundacao simples para OPs:
+
+- OPs em `production_orders` vinculadas a cards genericos em `kanban_cards`.
+- Templates editaveis de checklist.
+- Checklist individual editavel por OP.
+- Dashboard simples.
+- TV/Foco simples por endpoint e preview visual.
+
+Ainda nao foram implementados risco, alertas, status automatico complexo, OCR/Telegram, importacao real ou TV final full screen.
