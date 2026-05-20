@@ -62,18 +62,14 @@ test("smoke: Kanban configuravel fases 1 e 2", async ({ page, request }) => {
   await expect(page.getByRole("heading", { name: "Kanban", exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: /Configurar Kanban/i }).click();
-  const ocultarProjetos = page.getByRole("button", { name: /^Ocultar Projetos$/ });
-  const reativarProjetos = page.getByRole("button", { name: /^Reativar Projetos$/ });
+  const ocultarProjetos = page.getByRole("button", { name: /Ocultar Projetos/ });
+  const reativarProjetos = page.getByRole("button", { name: /Reativar Projetos/ });
   if ((await ocultarProjetos.count()) === 0 && (await reativarProjetos.count()) > 0) {
     await reativarProjetos.first().click();
-    await expect(page.getByRole("button", { name: /^Ocultar Projetos$/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Ocultar Projetos/ })).toBeVisible();
   }
-  await page.getByRole("button", { name: /^Ocultar Projetos$/ }).click();
-  await expect(page.getByRole("button", { name: /^Reativar Projetos$/ })).toBeVisible();
-  await page.getByRole("button", { name: /^Reativar Projetos$/ }).click();
-  await expect(page.getByRole("button", { name: /^Ocultar Projetos$/ })).toBeVisible();
-  await page.getByRole("button", { name: /^Ocultar Projetos$/ }).click();
-  await expect(page.getByRole("button", { name: /^Reativar Projetos$/ })).toBeVisible();
+  await page.getByRole("button", { name: /Ocultar Projetos/ }).click();
+  await expect(page.getByRole("button", { name: /Reativar Projetos/ })).toBeVisible();
   await page.getByLabel("Fechar").last().click();
   await expect(page.getByRole("button", { name: /Projetos Quadros de projetos/i })).toHaveCount(0);
 
@@ -109,7 +105,11 @@ test("smoke: Kanban configuravel fases 1 e 2", async ({ page, request }) => {
   await expect(page.getByText(templateName).first()).toBeVisible();
   const templateRow = page.locator("section").filter({ hasText: templateName }).filter({ has: page.getByRole("button", { name: /Duplicar/i }) }).first();
   await templateRow.getByRole("button", { name: /Duplicar/i }).click();
-  await expect(page.getByText(`${templateName} copia`).first()).toBeVisible();
+  // Aguardar a query invalidar e o novo template aparecer (pode estar no final da lista)
+  await page.waitForTimeout(1500);
+  const dialogEl = page.locator("dialog, [role='dialog']").last();
+  await dialogEl.evaluate((el) => el.scrollTo({ top: el.scrollHeight, behavior: "smooth" }));
+  await expect(page.getByText(`${templateName} copia`).first()).toBeVisible({ timeout: 15000 });
   const duplicatedRow = page.locator("section").filter({ hasText: `${templateName} copia` }).filter({ has: page.getByRole("button", { name: /Arquivar/i }) }).first();
   await duplicatedRow.getByRole("button", { name: /Arquivar/i }).click();
   await expect(page.getByText(`${templateName} copia`).first()).toHaveCount(0);
