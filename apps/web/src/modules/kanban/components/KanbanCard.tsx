@@ -3,7 +3,8 @@ import { CSS } from "@dnd-kit/utilities";
 import { GripVertical } from "lucide-react";
 
 import { cn } from "../../../shared/utils/cn";
-import type { KanbanCard } from "../types";
+import { formatCustomFieldValue, getCardCustomFields } from "../config";
+import type { KanbanBoardConfig, KanbanCard } from "../types";
 import { priorityClasses, priorityLabel } from "../utils/priority";
 import { canMoveCard } from "../utils/permissions";
 
@@ -11,10 +12,13 @@ type KanbanCardProps = {
   card: KanbanCard;
   onOpen: (cardId: string) => void;
   isOverlay?: boolean;
+  config?: KanbanBoardConfig;
 };
 
-export function KanbanCardView({ card, onOpen, isOverlay }: KanbanCardProps) {
+export function KanbanCardView({ card, onOpen, isOverlay, config }: KanbanCardProps) {
   const draggable = canMoveCard();
+  const visibleFields = getVisibleFields(config);
+  const customFields = getCardCustomFields(card.metadata);
 
   return (
     <button
@@ -49,6 +53,16 @@ export function KanbanCardView({ card, onOpen, isOverlay }: KanbanCardProps) {
               </span>
             ) : null}
           </div>
+          {visibleFields.length > 0 ? (
+            <div className="mt-2 grid gap-1">
+              {visibleFields.map((field) => (
+                <p key={field.key} className="truncate text-[11px] text-slate-400">
+                  <span className="text-slate-500">{field.label}: </span>
+                  <span className="text-slate-200">{formatCustomFieldValue(field, customFields[field.key])}</span>
+                </p>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         <div
@@ -69,8 +83,10 @@ type DraggableKanbanCardProps = KanbanCardProps & {
   sortableId: string;
 };
 
-export function KanbanCard({ card, onOpen, sortableId }: DraggableKanbanCardProps) {
+export function KanbanCard({ card, onOpen, sortableId, config }: DraggableKanbanCardProps) {
   const disabled = !canMoveCard() || card.is_archived;
+  const visibleFields = getVisibleFields(config);
+  const customFields = getCardCustomFields(card.metadata);
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
     id: sortableId,
     disabled,
@@ -118,6 +134,12 @@ export function KanbanCard({ card, onOpen, sortableId }: DraggableKanbanCardProp
                     </span>
                   ) : null}
                 </div>
+                {visibleFields.map((field) => (
+                  <p key={field.key} className="mt-1 truncate text-[11px] text-slate-400">
+                    <span className="text-slate-500">{field.label}: </span>
+                    <span className="text-slate-200">{formatCustomFieldValue(field, customFields[field.key])}</span>
+                  </p>
+                ))}
               </div>
 
               <button
@@ -139,4 +161,8 @@ export function KanbanCard({ card, onOpen, sortableId }: DraggableKanbanCardProp
       </div>
     </div>
   );
+}
+
+function getVisibleFields(config?: KanbanBoardConfig) {
+  return (config?.card.fields ?? []).filter((field) => field.showInCard).sort((a, b) => a.order - b.order).slice(0, 3);
 }

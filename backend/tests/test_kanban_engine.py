@@ -20,6 +20,14 @@ from app.modules.kanban.models import (
     KanbanColumn,
     KanbanComment,
 )
+from app.modules.kanban.schemas import (
+    KanbanBoardFromTemplateCreate,
+    KanbanBoardTemplateCreate,
+    KanbanBoardTemplateDuplicateRequest,
+    KanbanHubContextCreate,
+    KanbanHubContextReorderRequest,
+    KanbanHubContextUpdate,
+)
 from app.modules.kanban.service import KanbanService
 
 
@@ -40,6 +48,9 @@ class FakeKanbanRepo:
 
     async def get_board(self, board_id: UUID):
         return self.boards.get(board_id)
+
+    async def get_board_by_key(self, key: str):
+        return next((board for board in self.boards.values() if board.key == key), None)
 
     async def create_board(self, board: KanbanBoard):
         board.id = board.id or uuid4()
@@ -202,6 +213,85 @@ async def test_create_board_requires_permission(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         await dependency(current_user=user, session=None)
     assert exc.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_hub_contexts_can_be_created_hidden_restored_and_reordered(actor_admin, monkeypatch):
+    repo = FakeKanbanRepo()
+
+    async def fake_audit(*_args, **_kwargs):
+        return None
+
+    async def fake_publish(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr("app.modules.kanban.service.write_audit_log", fake_audit)
+    monkeypatch.setattr(events, "publish_kanban_event", fake_publish)
+    service = KanbanService(session=None, repo=repo)
+
+    contexts = await service.list_contexts()
+    assert any(context.key == "projetos" for context in contexts)
+
+    manutencao = await service.create_context(
+        KanbanHubContextCreate(
+            key="manutencao",
+            name="Manutencao",
+            description="Fluxo de manutencao",
+            boardType="operational",
+            moduleContext="manutencao",
+        ),
+        actor_admin,
+    )
+    assert manutencao.key == "manutencao"
+
+    hidden = await service.update_context("projetos", KanbanHubContextUpdate(visible=False), actor_admin)
+    assert hidden.visible is False
+
+    restored = await service.restore_default_contexts(actor_admin)
+    assert next(context for context in restored if context.key == "projetos").visible is True
+
+    reordered = await service.reorder_contexts(KanbanHubContextReorderRequest(contexts=[{"key": "manutencao", "order": 5}, {"key": "quadros", "order": 10}]), actor_admin)
+    assert next(context for context in reordered if context.key == "manutencao").order == 5
+
+
+@pytest.mark.asyncio
+async def test_templates_and_board_from_template(actor_admin, monkeypatch):
+    repo = FakeKanbanRepo()
+
+    async def fake_audit(*_args, **_kwargs):
+        return None
+
+    async def fake_publish(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr("app.modules.kanban.service.write_audit_log", fake_audit)
+    monkeypatch.setattr(events, "publish_kanban_event", fake_publish)
+    service = KanbanService(session=None, repo=repo)
+
+    template = await service.create_template(
+        KanbanBoardTemplateCreate(
+            key="auditoria",
+            name="Auditoria",
+            boardType="custom",
+            moduleContext="auditoria",
+            columns=[
+                {"name": "Entrada", "key": "entrada", "order": 10},
+                {"name": "Finalizado", "key": "finalizado", "order": 20, "isDone": True},
+            ],
+        ),
+        actor_admin,
+    )
+    assert template.key == "auditoria"
+
+    duplicate = await service.duplicate_template("auditoria", KanbanBoardTemplateDuplicateRequest(key="auditoria_copia", name="Auditoria copia"), actor_admin)
+    assert duplicate.isSystem is False
+
+    board = await service.create_board_from_template(
+        KanbanBoardFromTemplateCreate(templateKey="auditoria", name="Quadro Auditoria", contextKey=None),
+        actor_admin,
+    )
+    assert board.metadata_json["config"]["configVersion"] == 1
+    assert len(await repo.list_columns(board.id)) == 2
 
 
 @pytest.mark.asyncio
@@ -398,3 +488,167 @@ async def test_attach_existing_file_and_soft_delete_card_and_list_activity(actor
 
     activity = await service.card_activity(card.id)
     assert isinstance(activity, list)
+
+
+@pytest.mark.asyncio
+async def test_update_board_config_merges_metadata_and_emits_activity(actor_admin, monkeypatch):
+    repo = FakeKanbanRepo()
+    board = KanbanBoard(
+        id=uuid4(),
+        key="config",
+        name="Configuravel",
+        board_type="custom",
+        is_active=True,
+        is_archived=False,
+        metadata_json={"created_from": "test", "config": {"configVersion": 1}},
+    )
+    repo.boards[board.id] = board
+    emitted: list[tuple[str, dict]] = []
+
+    async def fake_publish(event_type, payload, publish_to_user_id=None):
+        emitted.append((event_type, payload))
+
+    async def fake_audit(*_a, **_k):
+        return None
+
+    monkeypatch.setattr(events, "publish_kanban_event", fake_publish)
+    monkeypatch.setattr("app.modules.kanban.service.write_audit_log", fake_audit)
+    service = KanbanService(session=None, repo=repo)  # type: ignore[arg-type]
+
+    updated = await service.update_board_config(
+        board.id,
+        {
+            "terminology": {
+                "itemSingular": "Tarefa",
+                "itemPlural": "Tarefas",
+                "newItemLabel": "Nova tarefa",
+                "editItemLabel": "Editar tarefa",
+                "itemTitleLabel": "Titulo",
+                "itemDescriptionLabel": "Descricao",
+                "emptyStateText": "Nenhuma tarefa encontrada",
+            },
+            "card": {
+                "fields": [
+                    {
+                        "key": "cliente",
+                        "label": "Cliente",
+                        "type": "text",
+                        "required": True,
+                        "showInCard": True,
+                        "showInDrawer": True,
+                        "showInTv": True,
+                        "showInFilters": True,
+                        "order": 10,
+                    }
+                ]
+            },
+        },
+        actor_admin,
+    )
+
+    assert updated.metadata_json["created_from"] == "test"
+    assert updated.metadata_json["config"]["configVersion"] == 1
+    assert updated.metadata_json["config"]["terminology"]["newItemLabel"] == "Nova tarefa"
+    assert any(log.action == "board.config.updated" for log in repo.logs)
+    assert any(item[0] == events.KANBAN_BOARD_CONFIG_UPDATED for item in emitted)
+
+
+@pytest.mark.asyncio
+async def test_card_custom_fields_are_validated_against_board_config(actor_admin, monkeypatch):
+    repo = FakeKanbanRepo()
+    board = KanbanBoard(
+        id=uuid4(),
+        key="custom",
+        name="Custom",
+        board_type="custom",
+        is_active=True,
+        is_archived=False,
+        metadata_json={
+            "config": {
+                "configVersion": 1,
+                "card": {
+                    "fields": [
+                        {"key": "cliente", "label": "Cliente", "type": "text", "required": True, "showInCard": True, "showInDrawer": True, "showInTv": True, "showInFilters": True, "order": 1},
+                        {"key": "valor", "label": "Valor", "type": "currency", "required": False, "showInCard": True, "showInDrawer": True, "showInTv": True, "showInFilters": False, "order": 2},
+                        {
+                            "key": "fase",
+                            "label": "Fase",
+                            "type": "select",
+                            "required": False,
+                            "showInCard": False,
+                            "showInDrawer": True,
+                            "showInTv": False,
+                            "showInFilters": True,
+                            "order": 3,
+                            "options": [{"value": "novo", "label": "Novo"}],
+                        },
+                    ]
+                },
+            }
+        },
+    )
+    col = KanbanColumn(id=uuid4(), board_id=board.id, name="Fila", order_index=0, is_done=False, is_active=True, metadata_json={})
+    repo.boards[board.id] = board
+    repo.columns[col.id] = col
+
+    async def fake_audit(*_a, **_k):
+        return None
+
+    async def fake_publish(*_a, **_k):
+        return None
+
+    monkeypatch.setattr(events, "publish_kanban_event", fake_publish)
+    monkeypatch.setattr("app.modules.kanban.service.write_audit_log", fake_audit)
+    service = KanbanService(session=None, repo=repo)  # type: ignore[arg-type]
+
+    valid = await service.create_card(
+        {
+            "board_id": board.id,
+            "column_id": col.id,
+            "title": "Tarefa",
+            "priority": "medium",
+            "metadata": {"customFields": {"cliente": "Cliente A", "valor": 150000, "fase": "novo"}},
+        },
+        actor_admin,
+    )
+    assert valid.metadata_json["customFields"]["valor"] == 150000
+
+    with pytest.raises(HTTPException) as missing_required:
+        await service.create_card(
+            {
+                "board_id": board.id,
+                "column_id": col.id,
+                "title": "Sem cliente",
+                "priority": "medium",
+                "metadata": {"customFields": {"valor": 150000}},
+            },
+            actor_admin,
+        )
+    assert missing_required.value.status_code == 422
+
+    with pytest.raises(HTTPException) as invalid_select:
+        await service.create_card(
+            {
+                "board_id": board.id,
+                "column_id": col.id,
+                "title": "Select ruim",
+                "priority": "medium",
+                "metadata": {"customFields": {"cliente": "Cliente A", "fase": "invalido"}},
+            },
+            actor_admin,
+        )
+    assert invalid_select.value.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_configure_board_permission_is_required(monkeypatch):
+    user = User(id=uuid4(), username="u", name="U", password_hash="x", status="active", is_superuser=False)
+    dependency = require_permission("kanban.board.configure")
+
+    async def fake_get_user_permissions(_session, _user):
+        return {"kanban.board.edit"}
+
+    monkeypatch.setattr("app.core.permissions.get_user_permissions", fake_get_user_permissions)
+    with pytest.raises(HTTPException) as exc:
+        await dependency(current_user=user, session=None)
+    assert exc.value.status_code == 403

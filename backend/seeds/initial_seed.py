@@ -90,6 +90,9 @@ ROLE_PERMISSION_KEYS = {
         "kanban.board.view",
         "kanban.board.create",
         "kanban.board.edit",
+        "kanban.board.configure",
+        "kanban.context.view",
+        "kanban.template.view",
         "kanban.column.view",
         "kanban.card.view",
         "kanban.card.create",
@@ -113,6 +116,8 @@ ROLE_PERMISSION_KEYS = {
         "chat.send",
         "kanban.view",
         "kanban.board.view",
+        "kanban.context.view",
+        "kanban.template.view",
         "kanban.column.view",
         "kanban.card.view",
         "kanban.card.create",
@@ -134,6 +139,8 @@ ROLE_PERMISSION_KEYS = {
         "propostas.create",
         "kanban.view",
         "kanban.board.view",
+        "kanban.context.view",
+        "kanban.template.view",
         "kanban.card.view",
         "kanban.card.comment",
         "atalhos.view",
@@ -146,6 +153,8 @@ ROLE_PERMISSION_KEYS = {
         "compras.cotacoes.view",
         "kanban.view",
         "kanban.board.view",
+        "kanban.context.view",
+        "kanban.template.view",
         "kanban.card.view",
         "kanban.card.comment",
         "atalhos.view",
@@ -159,6 +168,8 @@ ROLE_PERMISSION_KEYS = {
         "controle_ti.view",
         "kanban.view",
         "kanban.board.view",
+        "kanban.context.view",
+        "kanban.template.view",
         "kanban.card.view",
         "kanban.card.comment",
         "atalhos.view",
@@ -169,6 +180,8 @@ ROLE_PERMISSION_KEYS = {
         "chat.send",
         "kanban.view",
         "kanban.board.view",
+        "kanban.context.view",
+        "kanban.template.view",
         "kanban.card.view",
         "atalhos.view",
         "helpdesk.view",
@@ -337,10 +350,47 @@ async def run() -> None:
                     is_active=True,
                     is_archived=False,
                     created_by=admin.id,
-                    metadata_json={"production_type": "simple"},
+                    metadata_json={
+                        "production_type": "simple",
+                        "systemKey": "kanban_producao",
+                        "isDefaultProductionBoard": True,
+                        "config": {
+                            "configVersion": 1,
+                            "terminology": {
+                                "itemSingular": "OP",
+                                "itemPlural": "OPs",
+                                "newItemLabel": "Nova OP",
+                                "editItemLabel": "Editar OP",
+                                "itemTitleLabel": "Numero OP",
+                                "itemDescriptionLabel": "Observacoes",
+                                "emptyStateText": "Nenhuma OP cadastrada.",
+                            },
+                        },
+                    },
                 )
                 session.add(production_board)
                 await session.flush()
+            else:
+                metadata = dict(production_board.metadata_json or {})
+                metadata.setdefault("production_type", "simple")
+                metadata.setdefault("systemKey", "kanban_producao")
+                metadata.setdefault("isDefaultProductionBoard", True)
+                config = dict(metadata.get("config") or {})
+                config.setdefault("configVersion", 1)
+                config.setdefault(
+                    "terminology",
+                    {
+                        "itemSingular": "OP",
+                        "itemPlural": "OPs",
+                        "newItemLabel": "Nova OP",
+                        "editItemLabel": "Editar OP",
+                        "itemTitleLabel": "Numero OP",
+                        "itemDescriptionLabel": "Observacoes",
+                        "emptyStateText": "Nenhuma OP cadastrada.",
+                    },
+                )
+                metadata["config"] = config
+                production_board.metadata_json = metadata
 
             production_columns = [
                 ("aberta", "Aberta", 0, False),

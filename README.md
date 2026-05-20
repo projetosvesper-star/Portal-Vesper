@@ -199,12 +199,60 @@ O Kanban usa componentes escuros padronizados do Portal para botoes, selects, di
 
 A rota interna `/kanban/tv` e a TV/Foco global. Ela permite escolher qualquer quadro permitido e alternar entre lista e kanban. Para quadros genericos, consome cards/colunas do Kanban Engine. Para Producao, usa o endpoint especializado de OPs e adapta os dados para o mesmo formato visual.
 
-O frontend deve receber a API por `VITE_API_BASE_URL`. Em desenvolvimento, se o backend atual estiver em `8002`, suba o Vite com:
+O frontend deve receber a API por `VITE_API_BASE_URL` ou pelo runtime config gerado pelo fluxo adaptável de desenvolvimento.
+
+## Kanban configuravel - Fase 1
+
+O Kanban agora possui uma primeira camada configuravel por quadro, sem criar tabelas novas:
+
+- configuracao versionada em `kanban_boards.metadata.config`;
+- valores dinamicos dos cards em `kanban_cards.metadata.customFields`;
+- terminologia configuravel (`Tarefa`, `Chamado`, `Solicitacao`, etc.);
+- texto do botao principal configuravel;
+- campos customizados simples por quadro;
+- validacao backend dos campos customizados;
+- formulario, drawer, card compacto e TV/Foco lendo a configuracao do board;
+- evento `kanban.board.config.updated` ao alterar configuracao.
+
+Tipos de campo suportados nesta fase: `text`, `textarea`, `number`, `date`, `select`, `checkbox`, `user` e `currency`. Valores de `currency` sao salvos em centavos. Valores de `user` salvam o `user_id`.
+
+Permissao para configurar quadro: `kanban.board.configure`.
+
+O Kanban Producao continua usando `production_orders`; ele apenas pode ler a terminologia visual do board de Producao para labels e botoes.
+
+## Kanban configuravel - Fase 2
+
+O Hub Kanban agora possui contextos e templates configuraveis pelo Portal:
+
+- contextos carregados por `/api/kanban/contexts`;
+- templates carregados por `/api/kanban/templates`;
+- criacao de quadro por template em `/api/kanban/boards/from-template`;
+- `Configurar Kanban` permite ocultar, reativar, reordenar e criar contextos;
+- templates podem ser criados, editados, duplicados, arquivados/restaurados e usados na criacao de boards;
+- fallback local continua ativo se a API de contexto/template falhar em desenvolvimento.
+
+Permissoes novas: `kanban.context.view`, `kanban.context.manage`, `kanban.template.view` e `kanban.template.manage`.
+
+Os dados da Fase 2 ficam em JSONB no board interno `__kanban_hub_config__`, sem criar modulo novo e sem adicionar itens extras na sidebar.
+
+## Desenvolvimento adaptável
+
+Use o script adaptável para evitar dependência de portas fixas:
 
 ```bash
-set VITE_API_BASE_URL=http://localhost:8002
-npm run dev:web
+npm run dev:portal
 ```
+
+Ele tenta:
+
+- backend em `8000`, `8002`, `8003`, `8004`
+- frontend em `5174`, `5175`, `5176`, `5177`
+- validar `/api/health`
+- validar `/openapi.json`
+- gerar `runtime-config.json`
+- subir Vite com `VITE_API_BASE_URL` correto
+
+Se a porta 8000 estiver presa por um listener/pid fantasma, o fluxo usa `8002` como workaround.
 
 ## Diagnostico de backend antigo / HTTP 404
 

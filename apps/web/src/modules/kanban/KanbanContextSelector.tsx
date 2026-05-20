@@ -1,11 +1,12 @@
 import clsx from "clsx";
 
-export type KanbanContextKey = "quadros" | "producao" | "projetos" | "ti" | "personalizados";
+export type KanbanContextKey = string;
 
 export type KanbanContextOption = {
   key: KanbanContextKey;
   label: string;
   description: string;
+  route?: string | null;
   disabled?: boolean;
 };
 

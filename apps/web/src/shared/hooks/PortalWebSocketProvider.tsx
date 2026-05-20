@@ -1,6 +1,6 @@
 import React, { createContext, PropsWithChildren, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { API_BASE_URL } from "../api/client";
+import { getRuntimeConfig } from "../config/runtimeConfig";
 import { useAuthStore } from "../auth/store";
 
 type PortalWebSocketStatus = "offline" | "connecting" | "online";
@@ -22,6 +22,10 @@ type PortalWebSocketContextValue = {
 const PortalWebSocketContext = createContext<PortalWebSocketContextValue | null>(null);
 
 function toWebSocketUrl(apiBaseUrl: string) {
+  if (apiBaseUrl.startsWith("ws:") || apiBaseUrl.startsWith("wss:")) {
+    return apiBaseUrl;
+  }
+
   const url = new URL(apiBaseUrl);
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
   url.pathname = "/ws";
@@ -79,7 +83,7 @@ export function PortalWebSocketProvider({ children }: PropsWithChildren) {
     const connect = () => {
       if (stopped) return;
 
-      const socket = new WebSocket(toWebSocketUrl(API_BASE_URL), ["portal-vesper", `token.${token}`]);
+      const socket = new WebSocket(toWebSocketUrl(getRuntimeConfig().wsBaseUrl), ["portal-vesper", `token.${token}`]);
       socketRef.current = socket;
       setStatus("connecting");
 

@@ -52,8 +52,20 @@ Stream:
 Eventos publicados:
 
 - `kanban.board.created`
+- `kanban.board.created_from_template`
 - `kanban.board.updated`
+- `kanban.board.config.updated`
 - `kanban.board.archived`
+- `kanban.context.created`
+- `kanban.context.updated`
+- `kanban.context.deleted`
+- `kanban.context.reordered`
+- `kanban.context.defaults_restored`
+- `kanban.template.created`
+- `kanban.template.updated`
+- `kanban.template.deleted`
+- `kanban.template.duplicated`
+- `kanban.template.restored`
 - `kanban.column.created`
 - `kanban.column.updated`
 - `kanban.column.reordered`

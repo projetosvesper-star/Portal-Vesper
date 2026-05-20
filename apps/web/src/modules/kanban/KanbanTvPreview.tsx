@@ -46,12 +46,13 @@ export function KanbanTvPreview({ mode, items }: KanbanTvPreviewProps) {
 }
 
 function TvItemCard({ item, compact = false }: { item: KanbanTvItem; compact?: boolean }) {
+  const titleClass = item.textSize === "xlarge" ? "text-2xl" : item.textSize === "large" ? "text-xl" : "text-base";
   return (
     <article className="min-w-0 rounded-lg border border-border bg-slate-950/35 p-4">
       <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <h3 className={compact ? "truncate text-base font-semibold text-white" : "truncate text-xl font-semibold text-white"}>{item.title}</h3>
+            <h3 className={compact ? "truncate text-base font-semibold text-white" : `truncate ${titleClass} font-semibold text-white`}>{item.title}</h3>
             <PortalBadge tone={item.sourceType === "production" ? "cyan" : "slate"}>
               {item.sourceType === "production" ? "Produção" : "Kanban"}
             </PortalBadge>
@@ -72,6 +73,13 @@ function TvItemCard({ item, compact = false }: { item: KanbanTvItem; compact?: b
       {item.progress !== null ? (
         <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-800">
           <div className="h-full rounded-full bg-cyan" style={{ width: `${Math.max(0, Math.min(100, item.progress))}%` }} />
+        </div>
+      ) : null}
+      {item.tags.length > 0 ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {item.tags.slice(0, 6).map((tag) => (
+            <PortalBadge key={tag} tone="slate">{tag}</PortalBadge>
+          ))}
         </div>
       ) : null}
     </article>

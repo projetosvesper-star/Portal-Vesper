@@ -6,11 +6,22 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import write_audit_log
 from app.models import User
 from app.modules.kanban import events
+from app.modules.kanban.configuration import merge_board_config, normalize_board_config, validate_card_metadata_for_board, validate_config_payload
+from app.modules.kanban.hub_config import (
+    HUB_CONFIG_BOARD_KEY,
+    HUB_CONFIG_METADATA_KEY,
+    default_hub_contexts,
+    default_board_templates,
+    normalize_contexts,
+    normalize_templates,
+    serialize_hub_config,
+)
 from app.modules.kanban.models import (
     KanbanActivityLog,
     KanbanAttachment,
@@ -23,6 +34,18 @@ from app.modules.kanban.models import (
     KanbanComment,
 )
 from app.modules.kanban.repository import KanbanRepository
+from app.modules.kanban.schemas import KanbanBoardConfigRead, KanbanBoardConfigUpdate
+from app.modules.kanban.schemas import (
+    KanbanBoardFromTemplateCreate,
+    KanbanBoardTemplate,
+    KanbanBoardTemplateCreate,
+    KanbanBoardTemplateDuplicateRequest,
+    KanbanBoardTemplateUpdate,
+    KanbanHubContext,
+    KanbanHubContextCreate,
+    KanbanHubContextReorderRequest,
+    KanbanHubContextUpdate,
+)
 
 
 class KanbanService:
@@ -93,13 +116,14 @@ class KanbanService:
         limit: int = 100,
         offset: int = 0,
     ) -> list[KanbanBoard]:
-        return await self.repo.list_boards(
+        boards = await self.repo.list_boards(
             board_type=board_type,
             module_context=module_context,
             is_archived=None if include_archived else False,
             limit=limit,
             offset=offset,
         )
+        return [board for board in boards if board.key != HUB_CONFIG_BOARD_KEY]
 
     async def get_board(self, board_id: UUID) -> KanbanBoard:
         board = await self.repo.get_board(board_id)
@@ -165,6 +189,322 @@ class KanbanService:
         await self._emit(
             events.KANBAN_BOARD_UPDATED,
             {"board_id": str(board.id), "board_name": board.name, "actor_user_id": str(actor.id)},
+            publish_to_user_id=actor.id,
+        )
+        return board
+
+    async def get_board_config(self, board_id: UUID) -> KanbanBoardConfigRead:
+        board = await self.get_board(board_id)
+        return normalize_board_config(board.metadata_json)
+
+    async def validate_board_config(self, config: KanbanBoardConfigRead) -> KanbanBoardConfigRead:
+        return validate_config_payload(config)
+
+    async def update_board_config(self, board_id: UUID, patch: KanbanBoardConfigUpdate, actor: User) -> KanbanBoard:
+        board = await self.get_board(board_id)
+        if isinstance(patch, dict):
+            patch = KanbanBoardConfigUpdate.model_validate(patch)
+        merged_metadata, old_config, new_config = merge_board_config(board.metadata_json, patch)
+        board.metadata_json = merged_metadata
+        await self.repo.update_board(board)
+
+        payload = {
+            "board_id": str(board.id),
+            "actor_user_id": str(actor.id),
+            "configVersion": new_config.configVersion,
+        }
+        await self._activity(
+            "board.config.updated",
+            board_id=board.id,
+            actor_user_id=actor.id,
+            old_value=old_config.model_dump(mode="json"),
+            new_value=new_config.model_dump(mode="json"),
+            metadata={"configVersion": new_config.configVersion},
+        )
+        await self._audit(
+            "board.config.updated",
+            actor_user_id=actor.id,
+            entity_type="kanban_boards",
+            entity_id=board.id,
+            metadata=payload,
+        )
+        await self._emit(events.KANBAN_BOARD_CONFIG_UPDATED, payload, publish_to_user_id=actor.id)
+        return board
+
+    # -----------------------------
+    # Hub config: contexts/templates
+    # -----------------------------
+    async def _hub_config_board(self) -> KanbanBoard:
+        board = await self.repo.get_board_by_key(HUB_CONFIG_BOARD_KEY)
+        if board is None:
+            board = KanbanBoard(
+                key=HUB_CONFIG_BOARD_KEY,
+                name="Kanban Hub Config",
+                description="Configuracao persistente do Hub Kanban.",
+                board_type="system",
+                module_context="kanban",
+                icon="Settings",
+                is_active=False,
+                is_archived=True,
+                metadata_json={
+                    HUB_CONFIG_METADATA_KEY: serialize_hub_config(default_hub_contexts(), default_board_templates()),
+                    "system": True,
+                },
+            )
+            try:
+                await self.repo.create_board(board)
+                return board
+            except IntegrityError:
+                await self.repo.session.rollback()
+                existing = await self.repo.get_board_by_key(HUB_CONFIG_BOARD_KEY)
+                if existing is not None:
+                    return existing
+                raise
+
+        metadata = dict(board.metadata_json or {})
+        hub = metadata.get(HUB_CONFIG_METADATA_KEY) if isinstance(metadata.get(HUB_CONFIG_METADATA_KEY), dict) else {}
+        contexts = normalize_contexts(hub.get("contexts"))
+        templates = normalize_templates(hub.get("templates"))
+        metadata[HUB_CONFIG_METADATA_KEY] = serialize_hub_config(contexts, templates)
+        metadata["system"] = True
+        board.metadata_json = metadata
+        await self.repo.update_board(board)
+        return board
+
+    async def _read_hub_config(self) -> tuple[KanbanBoard, list[KanbanHubContext], list[KanbanBoardTemplate]]:
+        board = await self._hub_config_board()
+        hub = (board.metadata_json or {}).get(HUB_CONFIG_METADATA_KEY) or {}
+        return board, normalize_contexts(hub.get("contexts")), normalize_templates(hub.get("templates"))
+
+    async def _write_hub_config(
+        self,
+        board: KanbanBoard,
+        contexts: list[KanbanHubContext],
+        templates: list[KanbanBoardTemplate],
+    ) -> None:
+        metadata = dict(board.metadata_json or {})
+        metadata[HUB_CONFIG_METADATA_KEY] = serialize_hub_config(contexts, templates)
+        metadata["system"] = True
+        board.metadata_json = metadata
+        await self.repo.update_board(board)
+
+    async def list_contexts(self) -> list[KanbanHubContext]:
+        _, contexts, _ = await self._read_hub_config()
+        return [context for context in contexts if context.deletedAt is None]
+
+    async def create_context(self, payload: KanbanHubContextCreate, actor: User) -> KanbanHubContext:
+        board, contexts, templates = await self._read_hub_config()
+        if any(context.key == payload.key and context.deletedAt is None for context in contexts):
+            raise HTTPException(status_code=409, detail="Contexto ja existe")
+        if payload.route and any(context.route == payload.route and context.deletedAt is None for context in contexts):
+            raise HTTPException(status_code=409, detail="Ja existe contexto ativo com esta route")
+        context = KanbanHubContext.model_validate({**payload.model_dump(), "isSystem": False})
+        contexts.append(context)
+        await self._write_hub_config(board, contexts, templates)
+        await self._audit("kanban.context.created", actor_user_id=actor.id, entity_type="kanban_contexts", entity_id=None, metadata=context.model_dump(mode="json"))
+        await self._emit(events.KANBAN_CONTEXT_CREATED, {"context_key": context.key, "actor_user_id": str(actor.id)}, publish_to_user_id=actor.id)
+        return context
+
+    async def update_context(self, context_key: str, payload: KanbanHubContextUpdate, actor: User) -> KanbanHubContext:
+        board, contexts, templates = await self._read_hub_config()
+        index = next((idx for idx, item in enumerate(contexts) if item.key == context_key and item.deletedAt is None), None)
+        if index is None:
+            raise HTTPException(status_code=404, detail="Contexto nao encontrado")
+        current = contexts[index]
+        data = current.model_dump()
+        patch = payload.model_dump(exclude_unset=True)
+        if current.isSystem:
+            patch.pop("kind", None)
+        data.update(patch)
+        updated = KanbanHubContext.model_validate(data)
+        if updated.route and any(item.key != updated.key and item.route == updated.route and item.deletedAt is None for item in contexts):
+            raise HTTPException(status_code=409, detail="Ja existe contexto ativo com esta route")
+        contexts[index] = updated
+        await self._write_hub_config(board, contexts, templates)
+        await self._audit("kanban.context.updated", actor_user_id=actor.id, entity_type="kanban_contexts", entity_id=None, metadata={"context_key": context_key})
+        await self._emit(events.KANBAN_CONTEXT_UPDATED, {"context_key": context_key, "actor_user_id": str(actor.id)}, publish_to_user_id=actor.id)
+        return updated
+
+    async def delete_context(self, context_key: str, actor: User) -> KanbanHubContext:
+        board, contexts, templates = await self._read_hub_config()
+        index = next((idx for idx, item in enumerate(contexts) if item.key == context_key and item.deletedAt is None), None)
+        if index is None:
+            raise HTTPException(status_code=404, detail="Contexto nao encontrado")
+        current = contexts[index]
+        if current.isSystem:
+            updated = KanbanHubContext.model_validate({**current.model_dump(), "visible": False})
+        else:
+            updated = KanbanHubContext.model_validate({**current.model_dump(), "visible": False, "deletedAt": datetime.now(UTC)})
+        contexts[index] = updated
+        await self._write_hub_config(board, contexts, templates)
+        await self._audit("kanban.context.deleted", actor_user_id=actor.id, entity_type="kanban_contexts", entity_id=None, metadata={"context_key": context_key})
+        await self._emit(events.KANBAN_CONTEXT_DELETED, {"context_key": context_key, "actor_user_id": str(actor.id)}, publish_to_user_id=actor.id)
+        return updated
+
+    async def restore_default_contexts(self, actor: User) -> list[KanbanHubContext]:
+        board, contexts, templates = await self._read_hub_config()
+        custom = [context for context in contexts if not context.isSystem]
+        contexts = default_hub_contexts() + custom
+        await self._write_hub_config(board, contexts, templates)
+        await self._audit("kanban.context.defaults_restored", actor_user_id=actor.id, entity_type="kanban_contexts", entity_id=None)
+        await self._emit(events.KANBAN_CONTEXT_DEFAULTS_RESTORED, {"actor_user_id": str(actor.id)}, publish_to_user_id=actor.id)
+        return [context for context in contexts if context.deletedAt is None]
+
+    async def reorder_contexts(self, payload: KanbanHubContextReorderRequest, actor: User) -> list[KanbanHubContext]:
+        board, contexts, templates = await self._read_hub_config()
+        order_by_key = {item.key: item.order for item in payload.contexts}
+        updated = [KanbanHubContext.model_validate({**context.model_dump(), "order": order_by_key.get(context.key, context.order)}) for context in contexts]
+        await self._write_hub_config(board, updated, templates)
+        await self._audit("kanban.context.reordered", actor_user_id=actor.id, entity_type="kanban_contexts", entity_id=None, metadata={"orders": order_by_key})
+        await self._emit(events.KANBAN_CONTEXT_REORDERED, {"orders": order_by_key, "actor_user_id": str(actor.id)}, publish_to_user_id=actor.id)
+        return [context for context in updated if context.deletedAt is None]
+
+    async def list_templates(self) -> list[KanbanBoardTemplate]:
+        _, _, templates = await self._read_hub_config()
+        return [template for template in templates if template.deletedAt is None]
+
+    async def get_template(self, template_key: str) -> KanbanBoardTemplate:
+        templates = await self.list_templates()
+        template = next((item for item in templates if item.key == template_key), None)
+        if template is None:
+            raise HTTPException(status_code=404, detail="Template nao encontrado")
+        return template
+
+    async def create_template(self, payload: KanbanBoardTemplateCreate, actor: User) -> KanbanBoardTemplate:
+        board, contexts, templates = await self._read_hub_config()
+        if any(template.key == payload.key and template.deletedAt is None for template in templates):
+            raise HTTPException(status_code=409, detail="Template ja existe")
+        template = KanbanBoardTemplate.model_validate({**payload.model_dump(mode="json"), "isSystem": False, "isActive": True})
+        templates.append(template)
+        await self._write_hub_config(board, contexts, templates)
+        await self._audit("kanban.template.created", actor_user_id=actor.id, entity_type="kanban_templates", entity_id=None, metadata=template.model_dump(mode="json"))
+        await self._emit(events.KANBAN_TEMPLATE_CREATED, {"template_key": template.key, "actor_user_id": str(actor.id)}, publish_to_user_id=actor.id)
+        return template
+
+    async def update_template(self, template_key: str, payload: KanbanBoardTemplateUpdate, actor: User) -> KanbanBoardTemplate:
+        board, contexts, templates = await self._read_hub_config()
+        index = next((idx for idx, item in enumerate(templates) if item.key == template_key and item.deletedAt is None), None)
+        if index is None:
+            raise HTTPException(status_code=404, detail="Template nao encontrado")
+        current = templates[index]
+        data = current.model_dump(mode="json")
+        data.update(payload.model_dump(exclude_unset=True, mode="json"))
+        data["isSystem"] = current.isSystem
+        updated = KanbanBoardTemplate.model_validate(data)
+        templates[index] = updated
+        await self._write_hub_config(board, contexts, templates)
+        await self._audit("kanban.template.updated", actor_user_id=actor.id, entity_type="kanban_templates", entity_id=None, metadata={"template_key": template_key})
+        await self._emit(events.KANBAN_TEMPLATE_UPDATED, {"template_key": template_key, "actor_user_id": str(actor.id)}, publish_to_user_id=actor.id)
+        return updated
+
+    async def delete_template(self, template_key: str, actor: User) -> KanbanBoardTemplate:
+        board, contexts, templates = await self._read_hub_config()
+        index = next((idx for idx, item in enumerate(templates) if item.key == template_key and item.deletedAt is None), None)
+        if index is None:
+            raise HTTPException(status_code=404, detail="Template nao encontrado")
+        current = templates[index]
+        if current.isSystem:
+            updated = KanbanBoardTemplate.model_validate({**current.model_dump(mode="json"), "isActive": False})
+        else:
+            updated = KanbanBoardTemplate.model_validate({**current.model_dump(mode="json"), "isActive": False, "deletedAt": datetime.now(UTC)})
+        templates[index] = updated
+        await self._write_hub_config(board, contexts, templates)
+        await self._audit("kanban.template.deleted", actor_user_id=actor.id, entity_type="kanban_templates", entity_id=None, metadata={"template_key": template_key})
+        await self._emit(events.KANBAN_TEMPLATE_DELETED, {"template_key": template_key, "actor_user_id": str(actor.id)}, publish_to_user_id=actor.id)
+        return updated
+
+    async def duplicate_template(self, template_key: str, payload: KanbanBoardTemplateDuplicateRequest, actor: User) -> KanbanBoardTemplate:
+        source = await self.get_template(template_key)
+        board, contexts, templates = await self._read_hub_config()
+        duplicate_key = payload.key or f"{source.key}_copia"
+        if any(template.key == duplicate_key and template.deletedAt is None for template in templates):
+            raise HTTPException(status_code=409, detail="Template duplicado ja existe")
+        duplicate = KanbanBoardTemplate.model_validate(
+            {
+                **source.model_dump(mode="json"),
+                "key": duplicate_key,
+                "name": payload.name or f"{source.name} copia",
+                "isSystem": False,
+                "isActive": True,
+                "deletedAt": None,
+            }
+        )
+        templates.append(duplicate)
+        await self._write_hub_config(board, contexts, templates)
+        await self._audit("kanban.template.duplicated", actor_user_id=actor.id, entity_type="kanban_templates", entity_id=None, metadata={"source": template_key, "target": duplicate.key})
+        await self._emit(events.KANBAN_TEMPLATE_DUPLICATED, {"template_key": duplicate.key, "source_template_key": template_key, "actor_user_id": str(actor.id)}, publish_to_user_id=actor.id)
+        return duplicate
+
+    async def restore_template(self, template_key: str, actor: User) -> KanbanBoardTemplate:
+        board, contexts, templates = await self._read_hub_config()
+        index = next((idx for idx, item in enumerate(templates) if item.key == template_key), None)
+        if index is None:
+            raise HTTPException(status_code=404, detail="Template nao encontrado")
+        current = templates[index]
+        restored = KanbanBoardTemplate.model_validate({**current.model_dump(mode="json"), "isActive": True, "deletedAt": None})
+        templates[index] = restored
+        await self._write_hub_config(board, contexts, templates)
+        await self._audit("kanban.template.restored", actor_user_id=actor.id, entity_type="kanban_templates", entity_id=None, metadata={"template_key": template_key})
+        await self._emit(events.KANBAN_TEMPLATE_RESTORED, {"template_key": template_key, "actor_user_id": str(actor.id)}, publish_to_user_id=actor.id)
+        return restored
+
+    async def create_board_from_template(self, payload: KanbanBoardFromTemplateCreate, actor: User) -> KanbanBoard:
+        template = await self.get_template(payload.templateKey)
+        if not template.isActive:
+            raise HTTPException(status_code=400, detail="Template inativo")
+        contexts = await self.list_contexts()
+        context = next((item for item in contexts if item.key == payload.contextKey), None) if payload.contextKey else None
+        if payload.contextKey and context is None:
+            raise HTTPException(status_code=404, detail="Contexto nao encontrado")
+
+        board = await self.create_board(
+            {
+                "key": None,
+                "name": payload.name,
+                "description": payload.description or template.description,
+                "board_type": context.boardType if context and context.boardType else template.boardType,
+                "module_context": context.moduleContext if context and context.moduleContext else template.moduleContext,
+                "color": template.color,
+                "icon": template.icon,
+                "metadata": {
+                    "created_from": "kanban_template",
+                    "templateKey": template.key,
+                    "contextKey": payload.contextKey,
+                    "config": template.config.model_dump(mode="json"),
+                },
+            },
+            actor,
+        )
+        if not template.columns:
+            raise HTTPException(status_code=422, detail="Template precisa ter colunas")
+        for index, column in enumerate(sorted(template.columns, key=lambda item: item.order)):
+            await self.create_column(
+                board.id,
+                {
+                    "name": column.name,
+                    "key": column.key,
+                    "order_index": index,
+                    "is_done": column.isDone,
+                    "metadata": {"created_from": "kanban_template", "templateKey": template.key},
+                },
+                actor,
+            )
+        await self._activity(
+            "board.created_from_template",
+            board_id=board.id,
+            actor_user_id=actor.id,
+            metadata={"templateKey": template.key, "contextKey": payload.contextKey},
+        )
+        await self._audit(
+            "kanban.board.created_from_template",
+            actor_user_id=actor.id,
+            entity_type="kanban_boards",
+            entity_id=board.id,
+            metadata={"templateKey": template.key, "contextKey": payload.contextKey},
+        )
+        await self._emit(
+            events.KANBAN_BOARD_CREATED_FROM_TEMPLATE,
+            {"board_id": str(board.id), "template_key": template.key, "context_key": payload.contextKey, "actor_user_id": str(actor.id)},
             publish_to_user_id=actor.id,
         )
         return board
@@ -327,6 +667,7 @@ class KanbanService:
             raise HTTPException(status_code=404, detail="Coluna nao encontrada")
         if column.board_id != board.id:
             raise HTTPException(status_code=400, detail="Coluna nao pertence ao quadro")
+        metadata = await self._validate_card_metadata(board, payload.get("metadata") or {})
 
         card = KanbanCard(
             board_id=board.id,
@@ -343,7 +684,7 @@ class KanbanService:
             created_by=actor.id,
             assigned_to=payload.get("assigned_to"),
             is_archived=False,
-            metadata_json=payload.get("metadata") or {},
+            metadata_json=metadata,
         )
         await self.repo.create_card(card)
         await self._activity(
@@ -363,6 +704,7 @@ class KanbanService:
 
     async def update_card(self, card_id: UUID, payload: dict, actor: User) -> KanbanCard:
         card = await self.get_card(card_id)
+        board = await self.get_board(card.board_id)
         old = {"title": card.title, "description": card.description, "priority": card.priority, "status": card.status, "assigned_to": str(card.assigned_to) if card.assigned_to else None}
 
         assigned_changed = "assigned_to" in payload and payload.get("assigned_to") != card.assigned_to
@@ -370,7 +712,7 @@ class KanbanService:
             if field in payload and payload[field] is not None:
                 setattr(card, field, payload[field])
         if "metadata" in payload and payload["metadata"] is not None:
-            card.metadata_json = payload["metadata"]
+            card.metadata_json = await self._validate_card_metadata(board, payload["metadata"])
         await self.repo.update_card(card)
 
         await self._activity("card.updated", board_id=card.board_id, card_id=card.id, actor_user_id=actor.id, old_value=old, new_value=payload)
@@ -387,6 +729,21 @@ class KanbanService:
                 publish_to_user_id=actor.id,
             )
         return card
+
+    async def _validate_card_metadata(self, board: KanbanBoard, metadata: dict) -> dict:
+        config = normalize_board_config(board.metadata_json)
+        validated = validate_card_metadata_for_board(config, metadata)
+        user_field_keys = {field.key for field in config.card.fields if field.type == "user"}
+        custom_fields = validated.get("customFields") or {}
+        if self.session is not None:
+            for key in user_field_keys:
+                value = custom_fields.get(key)
+                if not value:
+                    continue
+                user = await self.session.get(User, UUID(str(value)))
+                if user is None:
+                    raise HTTPException(status_code=422, detail=f"Usuario informado no campo {key} nao existe")
+        return validated
 
     async def move_card(self, card_id: UUID, to_column_id: UUID, new_order_index: int, actor: User) -> KanbanCard:
         card = await self.get_card(card_id)

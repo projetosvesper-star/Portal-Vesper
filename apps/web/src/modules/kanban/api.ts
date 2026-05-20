@@ -2,14 +2,21 @@ import { apiRequest } from "../../shared/api/client";
 
 import type {
   AttachFilePayload,
+  CreateBoardFromTemplatePayload,
   CreateBoardPayload,
   CreateCardPayload,
   CreateChecklistItemPayload,
   CreateColumnPayload,
   CreateCommentPayload,
+  CreateContextPayload,
+  CreateTemplatePayload,
+  DuplicateTemplatePayload,
   KanbanActivityLog,
   KanbanAttachment,
   KanbanBoard,
+  KanbanBoardConfig,
+  KanbanBoardConfigEnvelope,
+  KanbanBoardTemplate,
   KanbanCard,
   KanbanCardAssignee,
   KanbanChecklistItem,
@@ -17,11 +24,15 @@ import type {
   KanbanComment,
   MoveCardPayload,
   ReorderColumnsPayload,
+  ReorderContextsPayload,
+  KanbanHubContext,
   UpdateBoardPayload,
   UpdateCardPayload,
   UpdateChecklistItemPayload,
   UpdateColumnPayload,
   UpdateCommentPayload,
+  UpdateContextPayload,
+  UpdateTemplatePayload,
   UUID,
 } from "./types";
 
@@ -31,6 +42,79 @@ export async function listBoards(filters: { boardType?: string | null; moduleCon
   if (filters.moduleContext) params.set("module_context", filters.moduleContext);
   const query = params.toString();
   return apiRequest<KanbanBoard[]>(`/api/kanban/boards${query ? `?${query}` : ""}`);
+}
+
+export async function listContexts() {
+  return apiRequest<KanbanHubContext[]>("/api/kanban/contexts");
+}
+
+export async function createContext(payload: CreateContextPayload) {
+  return apiRequest<KanbanHubContext>("/api/kanban/contexts", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateContext(contextKey: string, payload: UpdateContextPayload) {
+  return apiRequest<KanbanHubContext>(`/api/kanban/contexts/${contextKey}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteContext(contextKey: string) {
+  return apiRequest<KanbanHubContext>(`/api/kanban/contexts/${contextKey}`, { method: "DELETE" });
+}
+
+export async function restoreDefaultContexts() {
+  return apiRequest<KanbanHubContext[]>("/api/kanban/contexts/restore-defaults", { method: "POST" });
+}
+
+export async function reorderContexts(payload: ReorderContextsPayload) {
+  return apiRequest<KanbanHubContext[]>("/api/kanban/contexts/reorder", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function listTemplates() {
+  return apiRequest<KanbanBoardTemplate[]>("/api/kanban/templates");
+}
+
+export async function createTemplate(payload: CreateTemplatePayload) {
+  return apiRequest<KanbanBoardTemplate>("/api/kanban/templates", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateTemplate(templateKey: string, payload: UpdateTemplatePayload) {
+  return apiRequest<KanbanBoardTemplate>(`/api/kanban/templates/${templateKey}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteTemplate(templateKey: string) {
+  return apiRequest<KanbanBoardTemplate>(`/api/kanban/templates/${templateKey}`, { method: "DELETE" });
+}
+
+export async function duplicateTemplate(templateKey: string, payload: DuplicateTemplatePayload) {
+  return apiRequest<KanbanBoardTemplate>(`/api/kanban/templates/${templateKey}/duplicate`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function restoreTemplate(templateKey: string) {
+  return apiRequest<KanbanBoardTemplate>(`/api/kanban/templates/${templateKey}/restore`, { method: "POST" });
+}
+
+export async function createBoardFromTemplate(payload: CreateBoardFromTemplatePayload) {
+  return apiRequest<KanbanBoard>("/api/kanban/boards/from-template", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function createBoard(payload: CreateBoardPayload) {
@@ -54,6 +138,24 @@ export async function updateBoard(boardId: string, payload: UpdateBoardPayload) 
 export async function deleteBoard(boardId: string) {
   return apiRequest<KanbanBoard>(`/api/kanban/boards/${boardId}`, {
     method: "DELETE",
+  });
+}
+
+export async function getBoardConfig(boardId: string) {
+  return apiRequest<KanbanBoardConfigEnvelope>(`/api/kanban/boards/${boardId}/config`);
+}
+
+export async function updateBoardConfig(boardId: string, payload: Partial<KanbanBoardConfig>) {
+  return apiRequest<KanbanBoardConfigEnvelope>(`/api/kanban/boards/${boardId}/config`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function validateBoardConfig(boardId: string, config: KanbanBoardConfig) {
+  return apiRequest<KanbanBoardConfig>(`/api/kanban/boards/${boardId}/config/validate`, {
+    method: "POST",
+    body: JSON.stringify({ config }),
   });
 }
 

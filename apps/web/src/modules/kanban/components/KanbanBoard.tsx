@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { restrictToFirstScrollableAncestor, restrictToWindowEdges } from "@dnd-kit/modifiers";
 
 import { cn } from "../../../shared/utils/cn";
-import type { KanbanCard, KanbanColumn as KanbanColumnType } from "../types";
+import type { KanbanBoardConfig, KanbanCard, KanbanColumn as KanbanColumnType } from "../types";
 import { canMoveCard } from "../utils/permissions";
 import { useKanbanDndSensors } from "../utils/dnd";
 import { KanbanCardView } from "./KanbanCard";
@@ -15,9 +15,10 @@ type KanbanBoardProps = {
   onOpenCard: (cardId: string) => void;
   onCreateCard?: (columnId: string) => void;
   onMoveCard?: (args: { cardId: string; toColumnId: string; newOrderIndex: number }) => void;
+  config?: KanbanBoardConfig;
 };
 
-export function KanbanBoard({ columns, cards, onOpenCard, onCreateCard, onMoveCard }: KanbanBoardProps) {
+export function KanbanBoard({ columns, cards, onOpenCard, onCreateCard, onMoveCard, config }: KanbanBoardProps) {
   const sensors = useKanbanDndSensors();
   const allowDnD = canMoveCard() && Boolean(onMoveCard);
 
@@ -129,6 +130,7 @@ export function KanbanBoard({ columns, cards, onOpenCard, onCreateCard, onMoveCa
             onCreateCard={onCreateCard}
             isDragTarget={overColumnId === column.id}
             dropIndicatorIndex={overColumnId === column.id ? overIndex : null}
+            config={config}
           />
         ))}
       </div>
@@ -136,7 +138,7 @@ export function KanbanBoard({ columns, cards, onOpenCard, onCreateCard, onMoveCa
       <DragOverlay>
         {activeCard ? (
           <div className="w-[320px]">
-            <KanbanCardView card={activeCard} onOpen={() => {}} isOverlay />
+            <KanbanCardView card={activeCard} onOpen={() => {}} isOverlay config={config} />
           </div>
         ) : null}
       </DragOverlay>

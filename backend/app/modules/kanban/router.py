@@ -13,6 +13,7 @@ from app.models import User
 from app.modules.kanban.permissions import (
     KANBAN_ACTIVITY_VIEW,
     KANBAN_BOARD_CREATE,
+    KANBAN_BOARD_CONFIGURE,
     KANBAN_BOARD_DELETE,
     KANBAN_BOARD_EDIT,
     KANBAN_BOARD_MANAGE_PERMISSIONS,
@@ -32,6 +33,10 @@ from app.modules.kanban.permissions import (
     KANBAN_COLUMN_EDIT,
     KANBAN_COLUMN_REORDER,
     KANBAN_COLUMN_VIEW,
+    KANBAN_CONTEXT_MANAGE,
+    KANBAN_CONTEXT_VIEW,
+    KANBAN_TEMPLATE_MANAGE,
+    KANBAN_TEMPLATE_VIEW,
 )
 from app.modules.kanban.schemas import (
     ActivityLogRead,
@@ -41,6 +46,19 @@ from app.modules.kanban.schemas import (
     BoardPermissionCreate,
     BoardPermissionRead,
     BoardRead,
+    KanbanBoardConfigEnvelope,
+    KanbanBoardConfigRead,
+    KanbanBoardConfigUpdate,
+    KanbanBoardConfigValidateRequest,
+    KanbanBoardFromTemplateCreate,
+    KanbanBoardTemplate,
+    KanbanBoardTemplateCreate,
+    KanbanBoardTemplateDuplicateRequest,
+    KanbanBoardTemplateUpdate,
+    KanbanHubContext,
+    KanbanHubContextCreate,
+    KanbanHubContextReorderRequest,
+    KanbanHubContextUpdate,
     BoardUpdate,
     CardAssigneeCreate,
     CardAssigneeRead,
@@ -62,6 +80,126 @@ from app.modules.kanban.schemas import (
 from app.modules.kanban.service import KanbanService
 
 router = APIRouter(prefix="/kanban", tags=["Kanban"])
+
+
+# -----------------------------
+# Hub contexts/templates
+# -----------------------------
+@router.get("/contexts", response_model=list[KanbanHubContext])
+async def list_contexts(
+    _: User = Depends(require_permission(KANBAN_CONTEXT_VIEW)),
+    session: AsyncSession = Depends(get_session),
+) -> list[KanbanHubContext]:
+    return await KanbanService(session).list_contexts()
+
+
+@router.post("/contexts", response_model=KanbanHubContext, status_code=status.HTTP_201_CREATED)
+async def create_context(
+    payload: KanbanHubContextCreate,
+    current_user: User = Depends(require_permission(KANBAN_CONTEXT_MANAGE)),
+    session: AsyncSession = Depends(get_session),
+) -> KanbanHubContext:
+    return await KanbanService(session).create_context(payload, current_user)
+
+
+@router.patch("/contexts/{context_key}", response_model=KanbanHubContext)
+async def update_context(
+    context_key: str,
+    payload: KanbanHubContextUpdate,
+    current_user: User = Depends(require_permission(KANBAN_CONTEXT_MANAGE)),
+    session: AsyncSession = Depends(get_session),
+) -> KanbanHubContext:
+    return await KanbanService(session).update_context(context_key, payload, current_user)
+
+
+@router.delete("/contexts/{context_key}", response_model=KanbanHubContext)
+async def delete_context(
+    context_key: str,
+    current_user: User = Depends(require_permission(KANBAN_CONTEXT_MANAGE)),
+    session: AsyncSession = Depends(get_session),
+) -> KanbanHubContext:
+    return await KanbanService(session).delete_context(context_key, current_user)
+
+
+@router.post("/contexts/restore-defaults", response_model=list[KanbanHubContext])
+async def restore_default_contexts(
+    current_user: User = Depends(require_permission(KANBAN_CONTEXT_MANAGE)),
+    session: AsyncSession = Depends(get_session),
+) -> list[KanbanHubContext]:
+    return await KanbanService(session).restore_default_contexts(current_user)
+
+
+@router.post("/contexts/reorder", response_model=list[KanbanHubContext])
+async def reorder_contexts(
+    payload: KanbanHubContextReorderRequest,
+    current_user: User = Depends(require_permission(KANBAN_CONTEXT_MANAGE)),
+    session: AsyncSession = Depends(get_session),
+) -> list[KanbanHubContext]:
+    return await KanbanService(session).reorder_contexts(payload, current_user)
+
+
+@router.get("/templates", response_model=list[KanbanBoardTemplate])
+async def list_templates(
+    _: User = Depends(require_permission(KANBAN_TEMPLATE_VIEW)),
+    session: AsyncSession = Depends(get_session),
+) -> list[KanbanBoardTemplate]:
+    return await KanbanService(session).list_templates()
+
+
+@router.post("/templates", response_model=KanbanBoardTemplate, status_code=status.HTTP_201_CREATED)
+async def create_template(
+    payload: KanbanBoardTemplateCreate,
+    current_user: User = Depends(require_permission(KANBAN_TEMPLATE_MANAGE)),
+    session: AsyncSession = Depends(get_session),
+) -> KanbanBoardTemplate:
+    return await KanbanService(session).create_template(payload, current_user)
+
+
+@router.get("/templates/{template_key}", response_model=KanbanBoardTemplate)
+async def get_template(
+    template_key: str,
+    _: User = Depends(require_permission(KANBAN_TEMPLATE_VIEW)),
+    session: AsyncSession = Depends(get_session),
+) -> KanbanBoardTemplate:
+    return await KanbanService(session).get_template(template_key)
+
+
+@router.patch("/templates/{template_key}", response_model=KanbanBoardTemplate)
+async def update_template(
+    template_key: str,
+    payload: KanbanBoardTemplateUpdate,
+    current_user: User = Depends(require_permission(KANBAN_TEMPLATE_MANAGE)),
+    session: AsyncSession = Depends(get_session),
+) -> KanbanBoardTemplate:
+    return await KanbanService(session).update_template(template_key, payload, current_user)
+
+
+@router.delete("/templates/{template_key}", response_model=KanbanBoardTemplate)
+async def delete_template(
+    template_key: str,
+    current_user: User = Depends(require_permission(KANBAN_TEMPLATE_MANAGE)),
+    session: AsyncSession = Depends(get_session),
+) -> KanbanBoardTemplate:
+    return await KanbanService(session).delete_template(template_key, current_user)
+
+
+@router.post("/templates/{template_key}/duplicate", response_model=KanbanBoardTemplate, status_code=status.HTTP_201_CREATED)
+async def duplicate_template(
+    template_key: str,
+    payload: KanbanBoardTemplateDuplicateRequest,
+    current_user: User = Depends(require_permission(KANBAN_TEMPLATE_MANAGE)),
+    session: AsyncSession = Depends(get_session),
+) -> KanbanBoardTemplate:
+    return await KanbanService(session).duplicate_template(template_key, payload, current_user)
+
+
+@router.post("/templates/{template_key}/restore", response_model=KanbanBoardTemplate)
+async def restore_template(
+    template_key: str,
+    current_user: User = Depends(require_permission(KANBAN_TEMPLATE_MANAGE)),
+    session: AsyncSession = Depends(get_session),
+) -> KanbanBoardTemplate:
+    return await KanbanService(session).restore_template(template_key, current_user)
 
 
 # -----------------------------
@@ -99,6 +237,16 @@ async def create_board(
     return BoardRead.model_validate(board)
 
 
+@router.post("/boards/from-template", response_model=BoardRead, status_code=status.HTTP_201_CREATED)
+async def create_board_from_template(
+    payload: KanbanBoardFromTemplateCreate,
+    current_user: User = Depends(require_permission(KANBAN_BOARD_CREATE)),
+    session: AsyncSession = Depends(get_session),
+) -> BoardRead:
+    board = await KanbanService(session).create_board_from_template(payload, current_user)
+    return BoardRead.model_validate(board)
+
+
 @router.get("/boards/{board_id}", response_model=BoardRead)
 async def get_board(
     board_id: UUID,
@@ -130,6 +278,43 @@ async def archive_board(
     service = KanbanService(session)
     board = await service.archive_board(board_id, current_user)
     return BoardRead.model_validate(board)
+
+
+@router.get("/boards/{board_id}/config", response_model=KanbanBoardConfigEnvelope)
+async def get_board_config(
+    board_id: UUID,
+    _: User = Depends(require_permission(KANBAN_BOARD_VIEW)),
+    session: AsyncSession = Depends(get_session),
+) -> KanbanBoardConfigEnvelope:
+    service = KanbanService(session)
+    board = await service.get_board(board_id)
+    config = await service.get_board_config(board_id)
+    return KanbanBoardConfigEnvelope(board_id=board.id, config=config, metadata=board.metadata_json or {})
+
+
+@router.patch("/boards/{board_id}/config", response_model=KanbanBoardConfigEnvelope)
+async def update_board_config(
+    board_id: UUID,
+    payload: KanbanBoardConfigUpdate,
+    current_user: User = Depends(require_permission(KANBAN_BOARD_CONFIGURE)),
+    session: AsyncSession = Depends(get_session),
+) -> KanbanBoardConfigEnvelope:
+    service = KanbanService(session)
+    board = await service.update_board_config(board_id, payload, current_user)
+    config = await service.get_board_config(board.id)
+    return KanbanBoardConfigEnvelope(board_id=board.id, config=config, metadata=board.metadata_json or {})
+
+
+@router.post("/boards/{board_id}/config/validate", response_model=KanbanBoardConfigRead)
+async def validate_board_config(
+    board_id: UUID,
+    payload: KanbanBoardConfigValidateRequest,
+    _: User = Depends(require_permission(KANBAN_BOARD_CONFIGURE)),
+    session: AsyncSession = Depends(get_session),
+) -> KanbanBoardConfigRead:
+    service = KanbanService(session)
+    await service.get_board(board_id)
+    return await service.validate_board_config(payload.config)
 
 
 # Board permissions
@@ -515,4 +700,3 @@ async def board_activity(
     service = KanbanService(session)
     rows = await service.board_activity(board_id, limit=limit)
     return [ActivityLogRead.model_validate(r) for r in rows]
-

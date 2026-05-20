@@ -10,6 +10,11 @@ KANBAN_BOARD_CREATE = "kanban.board.create"
 KANBAN_BOARD_EDIT = "kanban.board.edit"
 KANBAN_BOARD_DELETE = "kanban.board.delete"
 KANBAN_BOARD_MANAGE_PERMISSIONS = "kanban.board.manage_permissions"
+KANBAN_BOARD_CONFIGURE = "kanban.board.configure"
+KANBAN_CONTEXT_VIEW = "kanban.context.view"
+KANBAN_CONTEXT_MANAGE = "kanban.context.manage"
+KANBAN_TEMPLATE_VIEW = "kanban.template.view"
+KANBAN_TEMPLATE_MANAGE = "kanban.template.manage"
 
 KANBAN_COLUMN_VIEW = "kanban.column.view"
 KANBAN_COLUMN_CREATE = "kanban.column.create"
@@ -42,6 +47,11 @@ KANBAN_PERMISSION_DEFINITIONS: list[tuple[str, str, str | None]] = [
     (KANBAN_BOARD_EDIT, "Editar quadros", "kanban"),
     (KANBAN_BOARD_DELETE, "Arquivar quadros", "kanban"),
     (KANBAN_BOARD_MANAGE_PERMISSIONS, "Gerenciar permissoes do quadro", "kanban"),
+    (KANBAN_BOARD_CONFIGURE, "Configurar quadros Kanban", "kanban"),
+    (KANBAN_CONTEXT_VIEW, "Ver contextos do Hub Kanban", "kanban"),
+    (KANBAN_CONTEXT_MANAGE, "Gerenciar contextos do Hub Kanban", "kanban"),
+    (KANBAN_TEMPLATE_VIEW, "Ver templates de quadros Kanban", "kanban"),
+    (KANBAN_TEMPLATE_MANAGE, "Gerenciar templates de quadros Kanban", "kanban"),
     (KANBAN_COLUMN_VIEW, "Ver colunas", "kanban"),
     (KANBAN_COLUMN_CREATE, "Criar colunas", "kanban"),
     (KANBAN_COLUMN_EDIT, "Editar colunas", "kanban"),
@@ -63,4 +73,3 @@ KANBAN_PERMISSION_DEFINITIONS: list[tuple[str, str, str | None]] = [
     (KANBAN_AUDIT_VIEW, "Ver auditoria Kanban", "kanban"),
     (KANBAN_ADMIN, "Admin Kanban (acoes forçadas)", "kanban"),
 ]
-

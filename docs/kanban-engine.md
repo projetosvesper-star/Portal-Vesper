@@ -133,6 +133,10 @@ Destino:
 
 Lista completa em `docs/websocket-events.md`.
 
+Evento adicional da Fase 1 configuravel:
+
+- `kanban.board.config.updated`: publicado ao alterar `metadata.config`, com activity log do Kanban e audit log global.
+
 ## Regras de dominio (minimo)
 
 - Card nao pode ser criado em coluna de outro quadro.
@@ -189,6 +193,97 @@ As telas Kanban usam componentes escuros compartilhados em `apps/web/src/shared/
 - `PortalDialog`, `PortalDrawer` e `ConfirmDialog`.
 
 O objetivo e manter Hub, quadro generico, Producao e TV/Foco com o mesmo padrao visual do Portal Vesper.
+
+## Kanban configuravel - Fase 1
+
+A primeira camada configuravel usa os campos JSONB ja existentes:
+
+- configuracao do quadro: `kanban_boards.metadata.config`;
+- valores customizados do card: `kanban_cards.metadata.customFields`.
+
+Nao foram criadas tabelas novas nesta fase. A configuracao e versionada por `configVersion=1`, validada no backend por schemas Pydantic v2 e atualizada por merge controlado para preservar outras chaves de `metadata`.
+
+### Contrato de configuracao
+
+O endpoint `GET /api/kanban/boards/{board_id}/config` retorna uma configuracao normalizada com:
+
+- `terminology`: singular, plural, texto do botao principal, labels de titulo/descricao e texto de vazio;
+- `visual`: cor, icone e densidade visual;
+- `features`: checklist, comentarios, anexos e atividade;
+- `card.fields`: campos customizados simples;
+- `tv`: modo padrao, campos exibidos e densidade de texto.
+
+O endpoint `PATCH /api/kanban/boards/{board_id}/config` salva a configuracao validada em `metadata.config`. O endpoint `POST /api/kanban/boards/{board_id}/config/validate` valida sem persistir.
+
+Permissao exigida para alterar/validar configuracao: `kanban.board.configure`.
+
+### Campos customizados
+
+Tipos suportados na Fase 1:
+
+- `text`;
+- `textarea`;
+- `number`;
+- `date`;
+- `select`;
+- `checkbox`;
+- `user`;
+- `currency`.
+
+Regras principais:
+
+- keys precisam usar letras minusculas, numeros e underline;
+- keys duplicadas sao bloqueadas;
+- `select` exige `options`;
+- `currency` e salvo em centavos como inteiro;
+- `user` salva `user_id`;
+- campos desconhecidos em `metadata.customFields` sao rejeitados;
+- campos obrigatorios sao validados no backend e no frontend.
+
+### UI dinamica
+
+Em `/kanban/boards/:boardId`, o botao `Configuracoes do quadro` abre um drawer com abas:
+
+- Geral;
+- Terminologia;
+- Campos;
+- TV/Foco.
+
+O `CardFormDialog` renderiza campos dinamicos conforme `board.config.card.fields`. O `CardDetailDrawer` mostra a secao de campos do card. O card compacto exibe os primeiros campos com `showInCard=true`. A TV/Foco global le `showInTv` e as preferencias de `board.config.tv`.
+
+Producao continua usando `production_orders`, mas pode ler a terminologia visual do board de producao para labels e botoes sem mover dados para `kanban_cards.metadata`.
+
+## Kanban configuravel - Fase 2
+
+A Fase 2 adiciona configuracao persistente do Hub Kanban usando um board interno de sistema:
+
+- key: `__kanban_hub_config__`
+- metadata: `hubConfig.contexts` e `hubConfig.templates`
+
+Endpoints de contexto:
+
+- `GET /api/kanban/contexts`
+- `POST /api/kanban/contexts`
+- `PATCH /api/kanban/contexts/{context_key}`
+- `DELETE /api/kanban/contexts/{context_key}`
+- `POST /api/kanban/contexts/restore-defaults`
+- `POST /api/kanban/contexts/reorder`
+
+Endpoints de template:
+
+- `GET /api/kanban/templates`
+- `POST /api/kanban/templates`
+- `GET /api/kanban/templates/{template_key}`
+- `PATCH /api/kanban/templates/{template_key}`
+- `DELETE /api/kanban/templates/{template_key}`
+- `POST /api/kanban/templates/{template_key}/duplicate`
+- `POST /api/kanban/templates/{template_key}/restore`
+
+Criacao por template:
+
+- `POST /api/kanban/boards/from-template`
+
+O board criado por template recebe `board_type`, `module_context`, `metadata.config` e colunas iniciais. A UI invalida boards, contextos, templates e dados de TV/Foco apos mutacoes.
 
 ### TV/Foco global
 
@@ -251,6 +346,9 @@ curl http://localhost:8000/openapi.json
 O OpenAPI ativo deve listar:
 
 - `/api/kanban/boards`
+- `/api/kanban/boards/from-template`
+- `/api/kanban/contexts`
+- `/api/kanban/templates`
 - `/api/kanban/boards/{board_id}`
 - `/api/kanban/boards/{board_id}/columns`
 - `/api/kanban/boards/{board_id}/cards`

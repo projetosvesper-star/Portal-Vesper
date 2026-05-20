@@ -1,29 +1,33 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { KanbanSquare, Plus, Tv } from "lucide-react";
+import { KanbanSquare, Plus, Settings, Tv } from "lucide-react";
 
 import { useAuthStore } from "../../shared/auth/store";
 import { useToast } from "../../shared/components/ToastProvider";
 import { usePortalWebSocketContext } from "../../shared/hooks/usePortalWebSocket";
 import { ErrorState, PageHeader, PortalButton } from "../../shared/ui";
-import { createBoard, createColumn, listBoards } from "./api";
+import { createBoard, createBoardFromTemplate, createColumn, listBoards } from "./api";
+import { FALLBACK_CONTEXTS, FALLBACK_TEMPLATES, canSeeContext } from "./hubConfig";
+import { useKanbanContexts, useKanbanTemplates } from "./hooks";
 import { KanbanBoardCreateDialog, type BoardCreateValues } from "./KanbanBoardCreateDialog";
 import { KanbanBoardsOverview, type BoardFilterKey } from "./KanbanBoardsOverview";
 import { KanbanContextSelector, type KanbanContextKey, type KanbanContextOption } from "./KanbanContextSelector";
+import { KanbanHubConfigDialog } from "./KanbanHubConfigDialog";
 import { kanbanQueryKeys } from "./queryKeys";
-import type { BoardType, KanbanBoard } from "./types";
+import type { BoardType, KanbanBoard, KanbanHubContext } from "./types";
 
 export function KanbanHubPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const toast = useToast();
   const permissions = useAuthStore((state) => state.permissions ?? []);
-  const canViewProduction = hasPermission(permissions, "kanban_producao.view");
   const canCreateBoard = hasPermission(permissions, "kanban.board.create");
+  const canManageHub = hasPermission(permissions, "kanban.context.manage") || hasPermission(permissions, "kanban.template.manage");
   const [context, setContext] = useState<KanbanContextKey>("quadros");
   const [filter, setFilter] = useState<BoardFilterKey>("all");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [configOpen, setConfigOpen] = useState(false);
   const { subscribe } = usePortalWebSocketContext();
   const wsTimerRef = useRef<number | null>(null);
 
@@ -31,12 +35,30 @@ export function KanbanHubPage() {
     queryKey: kanbanQueryKeys.boards(),
     queryFn: () => listBoards(),
   });
+  const contextsQuery = useKanbanContexts();
+  const templatesQuery = useKanbanTemplates();
 
   const boards = boardsQuery.data ?? [];
-  const visibleBoards = useMemo(() => filterBoardsByContext(boards, context), [boards, context]);
+  const rawContexts = useMemo(
+    () => (contextsQuery.data && contextsQuery.data.length > 0 ? contextsQuery.data : FALLBACK_CONTEXTS).slice().sort((a, b) => a.order - b.order),
+    [contextsQuery.data],
+  );
+  const hubContexts = useMemo(() => rawContexts.filter((item) => canSeeContext(item, permissions)), [rawContexts, permissions]);
+  const templates = templatesQuery.data && templatesQuery.data.length > 0 ? templatesQuery.data : FALLBACK_TEMPLATES;
+  const activeContext = hubContexts.find((item) => item.key === context) ?? hubContexts[0] ?? FALLBACK_CONTEXTS[0];
+  const visibleBoards = useMemo(() => filterBoardsByContext(boards, activeContext), [boards, activeContext]);
 
   const createBoardMutation = useMutation({
     mutationFn: async (values: BoardCreateValues) => {
+      if ("fromTemplate" in values) {
+        return createBoardFromTemplate({
+          templateKey: values.templateKey,
+          name: values.name,
+          description: values.description,
+          contextKey: values.contextKey,
+        });
+      }
+
       const board = await createBoard({
         key: values.key ?? null,
         name: values.name,
@@ -62,11 +84,11 @@ export function KanbanHubPage() {
     },
     onSuccess: async (board) => {
       await invalidateKanbanHub(queryClient, board.id);
-      toast.success("Quadro criado", "O quadro genérico foi criado no Kanban Engine.");
+      toast.success("Quadro criado", "O quadro foi criado no Kanban Engine.");
       navigate(`/kanban/boards/${board.id}`);
     },
-    onError: (err) => {
-      toast.error("Falha ao criar quadro", "O quadro não foi criado. Verifique os dados e o backend ativo.");
+    onError: () => {
+      toast.error("Falha ao criar quadro", "O quadro nao foi criado. Verifique os dados e o backend ativo.");
     },
   });
 
@@ -75,6 +97,8 @@ export function KanbanHubPage() {
       if (wsTimerRef.current) window.clearTimeout(wsTimerRef.current);
       wsTimerRef.current = window.setTimeout(() => {
         void invalidateKanbanHub(queryClient, boardId ?? undefined);
+        void queryClient.invalidateQueries({ queryKey: kanbanQueryKeys.contexts() });
+        void queryClient.invalidateQueries({ queryKey: kanbanQueryKeys.templates() });
         wsTimerRef.current = null;
       }, 250);
     },
@@ -94,23 +118,18 @@ export function KanbanHubPage() {
   }, [invalidateFromSocket, subscribe]);
 
   const contexts = useMemo<KanbanContextOption[]>(
-    () => [
-      { key: "quadros", label: "Quadros", description: "Todos os quadros do Kanban Engine." },
-      ...(canViewProduction ? [{ key: "producao" as const, label: "Produção", description: "OPs simples e checklist editável." }] : []),
-      { key: "projetos", label: "Projetos", description: "Quadros genéricos para projetos." },
-      { key: "ti", label: "TI / Operacional", description: "Quadros genéricos para TI e operações." },
-      { key: "personalizados", label: "Personalizados", description: "Fluxos customizados por equipe." },
-    ],
-    [canViewProduction],
+    () => hubContexts.map((item) => ({ key: item.key, label: item.name, description: item.description ?? "", route: item.route })),
+    [hubContexts],
   );
 
   function handleContextChange(next: KanbanContextKey) {
-    if (next === "producao") {
-      navigate("/kanban/producao");
+    const selected = hubContexts.find((item) => item.key === next);
+    if (selected?.route) {
+      navigate(selected.route);
       return;
     }
     setContext(next);
-    setFilter(defaultFilterForContext(next));
+    setFilter(defaultFilterForContext(selected));
   }
 
   function openCreateDialog(nextContext = context) {
@@ -118,7 +137,7 @@ export function KanbanHubPage() {
     setDialogOpen(true);
   }
 
-  const createDefaults = defaultsForContext(context);
+  const createDefaults = defaultsForContext(activeContext);
 
   return (
     <div className="min-w-0 space-y-6 overflow-x-hidden p-4 sm:p-6">
@@ -132,6 +151,12 @@ export function KanbanHubPage() {
               <Tv className="h-4 w-4" />
               TV/Foco
             </PortalButton>
+            {canManageHub ? (
+              <PortalButton variant="secondary" className="w-full sm:w-auto" onClick={() => setConfigOpen(true)}>
+                <Settings className="h-4 w-4" />
+                Configurar Kanban
+              </PortalButton>
+            ) : null}
             {canCreateBoard ? (
               <PortalButton className="w-full sm:w-auto" onClick={() => openCreateDialog()}>
                 <Plus className="h-4 w-4" />
@@ -141,6 +166,15 @@ export function KanbanHubPage() {
           </>
         }
       />
+
+      {contextsQuery.isError ? (
+        <ErrorState
+          error={contextsQuery.error}
+          title="Contextos usando fallback local"
+          fallback="Nao foi possivel carregar contextos configuraveis. O Hub continua com os padroes locais."
+          onRetry={() => contextsQuery.refetch()}
+        />
+      ) : null}
 
       <KanbanContextSelector value={context} options={contexts} onChange={handleContextChange} />
 
@@ -156,8 +190,8 @@ export function KanbanHubPage() {
           canCreate={canCreateBoard}
           onCreate={() => openCreateDialog()}
           onOpenBoard={(boardId) => navigate(`/kanban/boards/${boardId}`)}
-          emptyTitle={emptyTitleForContext(context)}
-          emptyActionLabel={emptyActionForContext(context)}
+          emptyTitle={`Nenhum quadro em ${activeContext.name}.`}
+          emptyActionLabel={`Criar quadro de ${activeContext.name}`}
         />
       )}
 
@@ -167,7 +201,11 @@ export function KanbanHubPage() {
         initialModuleContext={createDefaults.moduleContext}
         onClose={() => setDialogOpen(false)}
         onSubmit={(values) => createBoardMutation.mutateAsync(values)}
+        templates={templates}
+        contexts={hubContexts}
       />
+
+      <KanbanHubConfigDialog open={configOpen} onClose={() => setConfigOpen(false)} contexts={rawContexts} templates={templates} />
     </div>
   );
 }
@@ -176,9 +214,10 @@ function hasPermission(permissions: string[], key: string) {
   return permissions.includes(key) || permissions.includes("kanban.admin") || permissions.includes("admin.permissions.manage");
 }
 
-function filterBoardsByContext(boards: KanbanBoard[], context: KanbanContextKey) {
-  if (context === "projetos") return boards.filter((board) => board.board_type === "projects");
-  if (context === "ti") {
+function filterBoardsByContext(boards: KanbanBoard[], context: KanbanHubContext) {
+  if (context.key === "quadros") return boards;
+  if (context.boardType === "projects") return boards.filter((board) => board.board_type === "projects");
+  if (context.key === "ti_operacional") {
     return boards.filter((board) =>
       board.board_type === "operational" ||
       board.board_type === "helpdesk" ||
@@ -186,41 +225,28 @@ function filterBoardsByContext(boards: KanbanBoard[], context: KanbanContextKey)
       board.module_context === "operacional",
     );
   }
-  if (context === "personalizados") return boards.filter((board) => board.board_type === "custom");
+  if (context.boardType) {
+    return boards.filter((board) => board.board_type === context.boardType && (!context.moduleContext || board.module_context === context.moduleContext));
+  }
   return boards;
 }
 
-function defaultFilterForContext(context: KanbanContextKey): BoardFilterKey {
-  if (context === "projetos") return "projects";
-  if (context === "ti") return "all";
-  if (context === "personalizados") return "custom";
+function defaultFilterForContext(context?: KanbanHubContext): BoardFilterKey {
+  if (!context) return "all";
+  if (context.boardType === "projects") return "projects";
+  if (context.boardType === "custom") return "custom";
   return "all";
 }
 
-function defaultsForContext(context: KanbanContextKey): { boardType: BoardType; moduleContext: string } {
-  if (context === "projetos") return { boardType: "projects", moduleContext: "projetos" };
-  if (context === "ti") return { boardType: "operational", moduleContext: "ti" };
-  if (context === "personalizados") return { boardType: "custom", moduleContext: "outro" };
-  return { boardType: "projects", moduleContext: "projetos" };
-}
-
-function emptyTitleForContext(context: KanbanContextKey) {
-  if (context === "projetos") return "Nenhum quadro de Projetos encontrado.";
-  if (context === "ti") return "Nenhum quadro de TI / Operacional encontrado.";
-  if (context === "personalizados") return "Nenhum quadro personalizado encontrado.";
-  return "Nenhum quadro Kanban encontrado.";
-}
-
-function emptyActionForContext(context: KanbanContextKey) {
-  if (context === "projetos") return "Criar quadro de Projetos";
-  if (context === "ti") return "Criar quadro de TI";
-  if (context === "personalizados") return "Criar quadro personalizado";
-  return "Novo quadro";
+function defaultsForContext(context: KanbanHubContext): { boardType: BoardType; moduleContext: string } {
+  return { boardType: (context.boardType as BoardType | null) ?? "projects", moduleContext: context.moduleContext ?? "projetos" };
 }
 
 async function invalidateKanbanHub(queryClient: QueryClient, boardId?: string) {
   await Promise.all([
     queryClient.invalidateQueries({ queryKey: kanbanQueryKeys.boards() }),
+    queryClient.invalidateQueries({ queryKey: kanbanQueryKeys.contexts() }),
+    queryClient.invalidateQueries({ queryKey: kanbanQueryKeys.templates() }),
     boardId ? queryClient.invalidateQueries({ queryKey: kanbanQueryKeys.board(boardId) }) : Promise.resolve(),
     boardId ? queryClient.invalidateQueries({ queryKey: kanbanQueryKeys.columns(boardId) }) : Promise.resolve(),
     boardId ? queryClient.invalidateQueries({ queryKey: kanbanQueryKeys.cards(boardId) }) : Promise.resolve(),

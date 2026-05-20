@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import * as kanbanApi from "./api";
 import { kanbanQueryKeys } from "./queryKeys";
-import type { CreateCardPayload, MoveCardPayload, UpdateCardPayload, UUID } from "./types";
+import type { CreateCardPayload, KanbanBoardConfig, MoveCardPayload, UpdateCardPayload, UUID } from "./types";
 export { kanbanQueryKeys } from "./queryKeys";
 
 export function useKanbanBoards() {
@@ -17,6 +17,51 @@ export function useKanbanBoard(boardId: string | undefined) {
     queryKey: boardId ? kanbanQueryKeys.board(boardId) : ["kanban", "boards", "undefined"],
     queryFn: () => kanbanApi.getBoard(boardId!),
     enabled: Boolean(boardId),
+  });
+}
+
+export function useKanbanContexts() {
+  return useQuery({
+    queryKey: kanbanQueryKeys.contexts(),
+    queryFn: () => kanbanApi.listContexts(),
+  });
+}
+
+export function useKanbanTemplates() {
+  return useQuery({
+    queryKey: kanbanQueryKeys.templates(),
+    queryFn: () => kanbanApi.listTemplates(),
+  });
+}
+
+export function useBoardConfig(boardId: string | undefined) {
+  return useQuery({
+    queryKey: boardId ? kanbanQueryKeys.boardConfig(boardId) : ["kanban", "boards", "undefined", "config"],
+    queryFn: () => kanbanApi.getBoardConfig(boardId!),
+    enabled: Boolean(boardId),
+  });
+}
+
+export function useUpdateBoardConfig(boardId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: Partial<KanbanBoardConfig>) => kanbanApi.updateBoardConfig(boardId!, payload),
+    onSuccess: async (envelope) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: kanbanQueryKeys.boards() }),
+        queryClient.invalidateQueries({ queryKey: kanbanQueryKeys.board(envelope.board_id) }),
+        queryClient.invalidateQueries({ queryKey: kanbanQueryKeys.boardConfig(envelope.board_id) }),
+        queryClient.invalidateQueries({ queryKey: kanbanQueryKeys.cards(envelope.board_id) }),
+        queryClient.invalidateQueries({ queryKey: kanbanQueryKeys.boardActivity(envelope.board_id) }),
+        queryClient.invalidateQueries({ queryKey: kanbanQueryKeys.tv(envelope.board_id) }),
+      ]);
+    },
+  });
+}
+
+export function useValidateBoardConfig(boardId: string | undefined) {
+  return useMutation({
+    mutationFn: (config: KanbanBoardConfig) => kanbanApi.validateBoardConfig(boardId!, config),
   });
 }
 
@@ -45,6 +90,7 @@ export function useCreateKanbanCard(boardId?: string) {
       queryClient.invalidateQueries({ queryKey: kanbanQueryKeys.board(card.board_id) });
       queryClient.invalidateQueries({ queryKey: kanbanQueryKeys.columns(card.board_id) });
       queryClient.invalidateQueries({ queryKey: kanbanQueryKeys.cards(card.board_id) });
+      queryClient.invalidateQueries({ queryKey: kanbanQueryKeys.tv(card.board_id) });
       queryClient.setQueryData(kanbanQueryKeys.card(card.id), card);
       if (boardId) queryClient.invalidateQueries({ queryKey: kanbanQueryKeys.boardActivity(boardId) });
     },
@@ -60,6 +106,7 @@ export function useUpdateKanbanCard() {
       queryClient.invalidateQueries({ queryKey: kanbanQueryKeys.boards() });
       queryClient.invalidateQueries({ queryKey: kanbanQueryKeys.board(card.board_id) });
       queryClient.invalidateQueries({ queryKey: kanbanQueryKeys.cards(card.board_id) });
+      queryClient.invalidateQueries({ queryKey: kanbanQueryKeys.tv(card.board_id) });
       queryClient.setQueryData(kanbanQueryKeys.card(card.id), card);
       queryClient.invalidateQueries({ queryKey: kanbanQueryKeys.activity(card.id) });
     },

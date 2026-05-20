@@ -1,8 +1,12 @@
 export const kanbanQueryKeys = {
   boards: () => ["kanban", "boards"] as const,
+  contexts: () => ["kanban", "contexts"] as const,
+  templates: () => ["kanban", "templates"] as const,
+  template: (templateKey: string) => ["kanban", "templates", templateKey] as const,
   boardsFiltered: (filters: { boardType?: string | null; moduleContext?: string | null } = {}) =>
     ["kanban", "boards", filters.boardType ?? "all", filters.moduleContext ?? "all"] as const,
   board: (boardId: string) => ["kanban", "boards", boardId] as const,
+  boardConfig: (boardId: string) => ["kanban", "boards", boardId, "config"] as const,
   columns: (boardId: string) => ["kanban", "boards", boardId, "columns"] as const,
   cards: (boardId: string) => ["kanban", "boards", boardId, "cards"] as const,
   card: (cardId: string) => ["kanban", "cards", cardId] as const,

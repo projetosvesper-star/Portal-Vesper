@@ -1,13 +1,12 @@
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 
 import { ErrorState, PortalButton, PortalDialog, PortalInput, PortalSelect, PortalTextarea } from "../../shared/ui";
-import type { BoardType, CreateBoardPayload, KanbanBoard } from "./types";
+import { FALLBACK_TEMPLATES } from "./hubConfig";
+import type { BoardType, CreateBoardFromTemplatePayload, CreateBoardPayload, KanbanBoard, KanbanBoardTemplate, KanbanHubContext } from "./types";
 
 export type InitialColumnsPreset = "basic" | "projects" | "ti" | "custom";
 
-export type BoardCreateValues = CreateBoardPayload & {
-  initial_columns: string[];
-};
+export type BoardCreateValues = (CreateBoardPayload & { initial_columns: string[] }) | (CreateBoardFromTemplatePayload & { fromTemplate: true });
 
 const presetColumns: Record<InitialColumnsPreset, string[]> = {
   basic: ["A fazer", "Em andamento", "Revisão", "Concluído"],
@@ -46,12 +45,16 @@ export function KanbanBoardCreateDialog({
   initialModuleContext = "projetos",
   onClose,
   onSubmit,
+  templates = FALLBACK_TEMPLATES,
+  contexts = [],
 }: {
   open: boolean;
   initialBoardType?: BoardType;
   initialModuleContext?: string;
   onClose: () => void;
   onSubmit: (values: BoardCreateValues) => Promise<KanbanBoard>;
+  templates?: KanbanBoardTemplate[];
+  contexts?: KanbanHubContext[];
 }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -60,6 +63,7 @@ export function KanbanBoardCreateDialog({
   const [color, setColor] = useState("#38d3ee");
   const [icon, setIcon] = useState("KanbanSquare");
   const [preset, setPreset] = useState<InitialColumnsPreset>(initialBoardType === "projects" ? "projects" : initialModuleContext === "ti" ? "ti" : "basic");
+  const [templateKey, setTemplateKey] = useState("basico");
   const [customColumns, setCustomColumns] = useState("A fazer\nEm andamento\nConcluído");
   const [error, setError] = useState<unknown>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -70,7 +74,11 @@ export function KanbanBoardCreateDialog({
     setBoardType(initialBoardType);
     setModuleContext(initialModuleContext);
     setPreset(initialBoardType === "projects" ? "projects" : initialModuleContext === "ti" ? "ti" : "basic");
+    setTemplateKey(templates.find((template) => template.moduleContext === initialModuleContext)?.key ?? templates[0]?.key ?? "basico");
   }, [initialBoardType, initialModuleContext, open]);
+
+  const activeTemplates = useMemo(() => templates.filter((template) => template.isActive && !template.deletedAt).sort((a, b) => a.order - b.order), [templates]);
+  const selectedTemplate = activeTemplates.find((template) => template.key === templateKey) ?? null;
 
   const columns = useMemo(() => {
     if (preset === "custom") {
@@ -88,7 +96,7 @@ export function KanbanBoardCreateDialog({
       setError(new Error("Informe o nome do quadro."));
       return;
     }
-    if (columns.length === 0) {
+    if (!selectedTemplate && columns.length === 0) {
       setError(new Error("Informe pelo menos uma coluna inicial."));
       return;
     }
@@ -96,16 +104,26 @@ export function KanbanBoardCreateDialog({
     setSubmitting(true);
     setError(null);
     try {
-      await onSubmit({
-        name: name.trim(),
-        description: description.trim() || null,
-        board_type: boardType,
-        module_context: moduleContext || null,
-        color: color || null,
-        icon: icon.trim() || null,
-        metadata: { created_from: "kanban_hub" },
-        initial_columns: columns,
-      });
+      if (selectedTemplate) {
+        await onSubmit({
+          fromTemplate: true,
+          templateKey: selectedTemplate.key,
+          contextKey: contexts.find((context) => context.moduleContext === (selectedTemplate.moduleContext ?? moduleContext))?.key ?? null,
+          name: name.trim(),
+          description: description.trim() || selectedTemplate.description,
+        });
+      } else {
+        await onSubmit({
+          name: name.trim(),
+          description: description.trim() || null,
+          board_type: boardType,
+          module_context: moduleContext || null,
+          color: color || null,
+          icon: icon.trim() || null,
+          metadata: { created_from: "kanban_hub" },
+          initial_columns: columns,
+        });
+      }
       setName("");
       setDescription("");
       setCustomColumns("A fazer\nEm andamento\nConcluído");
@@ -139,9 +157,22 @@ export function KanbanBoardCreateDialog({
           <Field label="Nome">
             <PortalInput required value={name} onChange={(event) => setName(event.target.value)} />
           </Field>
+          <PortalSelect
+            label="Template"
+            value={selectedTemplate?.key ?? "manual"}
+            onChange={setTemplateKey}
+            options={[
+              { value: "manual", label: "Manual", description: "Criar quadro com colunas informadas na tela." },
+              ...activeTemplates.map((template) => ({
+                value: template.key,
+                label: template.name,
+                description: template.description ?? `${template.columns.length} colunas`,
+              })),
+            ]}
+          />
           <PortalSelect label="Tipo" value={boardType} onChange={(value) => setBoardType(value as BoardType)} options={boardTypeOptions} />
           <PortalSelect label="Contexto" value={moduleContext} onChange={setModuleContext} options={contextOptions} />
-          <PortalSelect label="Colunas iniciais" value={preset} onChange={(value) => setPreset(value as InitialColumnsPreset)} options={presetOptions} />
+          {!selectedTemplate ? <PortalSelect label="Colunas iniciais" value={preset} onChange={(value) => setPreset(value as InitialColumnsPreset)} options={presetOptions} /> : null}
           <Field label="Cor">
             <PortalInput value={color} onChange={(event) => setColor(event.target.value)} />
           </Field>
@@ -151,7 +182,14 @@ export function KanbanBoardCreateDialog({
           <Field label="Descrição" className="sm:col-span-2">
             <PortalTextarea value={description} onChange={(event) => setDescription(event.target.value)} />
           </Field>
-          {preset === "custom" ? (
+          {selectedTemplate ? (
+            <div className="rounded-lg border border-border bg-slate-950/40 p-3 text-sm text-slate-300 sm:col-span-2">
+              <p className="font-semibold text-white">Preview do template</p>
+              <p className="mt-1 text-xs text-slate-400">
+                {selectedTemplate.config.terminology.itemPlural} · {selectedTemplate.columns.map((column) => column.name).join(" / ")}
+              </p>
+            </div>
+          ) : preset === "custom" ? (
             <Field label="Colunas personalizadas, uma por linha" className="sm:col-span-2">
               <PortalTextarea className="min-h-28" value={customColumns} onChange={(event) => setCustomColumns(event.target.value)} />
             </Field>

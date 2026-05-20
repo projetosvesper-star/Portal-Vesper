@@ -7,10 +7,13 @@ import { usePortalWebSocketContext } from "../../shared/hooks/usePortalWebSocket
 import { ErrorState, LoadingSkeleton, PageHeader, PortalButton, PortalSelect, PortalTabs, SectionCard } from "../../shared/ui";
 import { getProductionTVPreview } from "../production/api";
 import { productionQueryKeys } from "../production/queryKeys";
+import { normalizeBoardConfig } from "./config";
 import { listBoards, listCards, listColumns } from "./api";
+import { canSeeContext } from "./hubConfig";
 import { adaptKanbanCardsToTvItems, adaptProductionTvResponse } from "./KanbanTvAdapter";
 import { KanbanTvPreview } from "./KanbanTvPreview";
 import { kanbanQueryKeys } from "./queryKeys";
+import { useBoardConfig, useKanbanContexts } from "./hooks";
 
 export function KanbanTvPage() {
   const queryClient = useQueryClient();
@@ -25,11 +28,20 @@ export function KanbanTvPage() {
     queryKey: kanbanQueryKeys.boards(),
     queryFn: () => listBoards(),
   });
+  const contextsQuery = useKanbanContexts();
 
   const boards = boardsQuery.data ?? [];
   const permittedBoards = useMemo(
-    () => boards.filter((board) => canViewProduction || !(board.board_type === "production" || board.module_context === "producao")),
-    [boards, canViewProduction],
+    () => boards.filter((board) => {
+      if (!canViewProduction && (board.board_type === "production" || board.module_context === "producao")) return false;
+      const context = (contextsQuery.data ?? []).find((item) => {
+        if (item.boardType && item.boardType === board.board_type) return true;
+        if (item.moduleContext && item.moduleContext === board.module_context) return true;
+        return false;
+      });
+      return context ? canSeeContext(context, permissions) : true;
+    }),
+    [boards, canViewProduction, contextsQuery.data, permissions],
   );
 
   useEffect(() => {
@@ -39,6 +51,14 @@ export function KanbanTvPage() {
 
   const selectedBoard = permittedBoards.find((board) => board.id === selectedBoardId) ?? null;
   const isProduction = selectedBoard?.board_type === "production" || selectedBoard?.module_context === "producao";
+  const boardConfigQuery = useBoardConfig(selectedBoardId || undefined);
+  const boardConfig = boardConfigQuery.data?.config ?? normalizeBoardConfig(selectedBoard);
+
+  useEffect(() => {
+    if (boardConfig.tv.defaultMode && mode === "list") {
+      setMode(boardConfig.tv.defaultMode);
+    }
+  }, [boardConfig.tv.defaultMode]);
 
   const columnsQuery = useQuery({
     queryKey: selectedBoardId ? kanbanQueryKeys.columns(selectedBoardId) : ["kanban", "tv", "columns", "none"],
@@ -59,9 +79,9 @@ export function KanbanTvPage() {
   });
 
   const tvItems = useMemo(() => {
-    if (isProduction && productionTvQuery.data) return adaptProductionTvResponse(productionTvQuery.data);
-    return adaptKanbanCardsToTvItems(cardsQuery.data ?? [], columnsQuery.data ?? []);
-  }, [cardsQuery.data, columnsQuery.data, isProduction, productionTvQuery.data]);
+    if (isProduction && productionTvQuery.data) return adaptProductionTvResponse(productionTvQuery.data, boardConfig);
+    return adaptKanbanCardsToTvItems(cardsQuery.data ?? [], columnsQuery.data ?? [], boardConfig);
+  }, [boardConfig, cardsQuery.data, columnsQuery.data, isProduction, productionTvQuery.data]);
 
   const invalidateTv = useCallback(() => {
     if (wsTimerRef.current) window.clearTimeout(wsTimerRef.current);
@@ -87,8 +107,8 @@ export function KanbanTvPage() {
     };
   }, [invalidateTv, subscribe]);
 
-  const loading = boardsQuery.isLoading || columnsQuery.isLoading || cardsQuery.isLoading || productionTvQuery.isLoading;
-  const error = boardsQuery.error ?? columnsQuery.error ?? cardsQuery.error ?? productionTvQuery.error;
+  const loading = boardsQuery.isLoading || contextsQuery.isLoading || boardConfigQuery.isLoading || columnsQuery.isLoading || cardsQuery.isLoading || productionTvQuery.isLoading;
+  const error = boardsQuery.error ?? contextsQuery.error ?? boardConfigQuery.error ?? columnsQuery.error ?? cardsQuery.error ?? productionTvQuery.error;
 
   return (
     <div className="min-w-0 space-y-6 overflow-x-hidden p-4 sm:p-6">
@@ -151,6 +171,7 @@ export function KanbanTvPage() {
   async function refetchAll() {
     await Promise.all([
       boardsQuery.refetch(),
+      contextsQuery.refetch(),
       columnsQuery.refetch(),
       cardsQuery.refetch(),
       productionTvQuery.refetch(),

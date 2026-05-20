@@ -48,6 +48,7 @@ export function PortalSelect({
       <button
         type="button"
         disabled={disabled}
+        aria-label={label}
         aria-haspopup="listbox"
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}

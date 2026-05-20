@@ -1,0 +1,9 @@
+{
+  "apiBaseUrl": "http://localhost:8000",
+  "wsBaseUrl": "ws://localhost:8000/ws",
+  "frontendUrl": "http://127.0.0.1:5174",
+  "environment": "development",
+  "backendPort": 8000,
+  "frontendPort": 5174,
+  "generatedAt": "2026-05-20T12:20:03.731Z"
+}

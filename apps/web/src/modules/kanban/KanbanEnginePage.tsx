@@ -1,20 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
+import { Plus, Settings } from "lucide-react";
 
 import { useToast } from "../../shared/components/ToastProvider";
 import { cn } from "../../shared/utils/cn";
 import { usePortalWebSocketContext } from "../../shared/hooks/usePortalWebSocket";
 import { EmptyState, ErrorState, MetricCard, PageHeader, PortalButton, PortalInput } from "../../shared/ui";
+import { normalizeBoardConfig } from "./config";
 import { createColumn } from "./api";
 import {
   kanbanQueryKeys,
+  useBoardConfig,
   useCreateKanbanCard,
   useKanbanBoards,
   useKanbanCards,
   useKanbanColumns,
   useMoveKanbanCard,
+  useUpdateBoardConfig,
   useUpdateKanbanCard,
 } from "./hooks";
 import type { KanbanCard, KanbanColumn, Priority, UUID } from "./types";
@@ -23,6 +26,7 @@ import { BoardToolbar } from "./components/BoardToolbar";
 import { CardDetailDrawer } from "./components/CardDetailDrawer";
 import { CardFormDialog } from "./components/CardFormDialog";
 import { EmptyKanbanState } from "./components/EmptyKanbanState";
+import { KanbanBoardConfigDrawer } from "./components/KanbanBoardConfigDrawer";
 import { KanbanBoard } from "./components/KanbanBoard";
 import { KanbanBoardSkeleton } from "./components/KanbanBoardSkeleton";
 import { canCreateCard } from "./utils/permissions";
@@ -54,10 +58,15 @@ function KanbanEnginePageInner() {
   const [editingCardId, setEditingCardId] = useState<string | null>(null);
   const [drawerCardId, setDrawerCardId] = useState<string | null>(null);
   const [manualColumnName, setManualColumnName] = useState("");
+  const [configOpen, setConfigOpen] = useState(false);
 
   const boardsQuery = useKanbanBoards();
   const boards = boardsQuery.data ?? [];
   const selectedBoardId = boardIdParam ?? null;
+  const selectedBoard = boards.find((board) => board.id === selectedBoardId) ?? null;
+  const boardConfigQuery = useBoardConfig(selectedBoardId ?? undefined);
+  const boardConfig = boardConfigQuery.data?.config ?? normalizeBoardConfig(selectedBoard);
+  const updateBoardConfigMutation = useUpdateBoardConfig(selectedBoardId ?? undefined);
 
   useEffect(() => {
     if (selectedBoardId) return;
@@ -197,6 +206,7 @@ function KanbanEnginePageInner() {
     assigned_to?: string;
     code?: string;
     status?: string;
+    metadata?: Record<string, unknown>;
   }) {
     const payloadBase = {
       board_id: values.board_id,
@@ -209,6 +219,7 @@ function KanbanEnginePageInner() {
       assigned_to: values.assigned_to || null,
       code: values.code?.trim() || null,
       status: values.status?.trim() || null,
+      metadata: values.metadata ?? {},
     };
 
     try {
@@ -224,13 +235,13 @@ function KanbanEnginePageInner() {
             },
           });
         }
-        toast.success("Card atualizado", "Alterações salvas com sucesso.");
+        toast.success(`${boardConfig.terminology.itemSingular} atualizado`, "Alteracoes salvas com sucesso.");
       } else {
         await createCardMutation.mutateAsync(payloadBase);
-        toast.success("Card criado", "Novo card criado com sucesso.");
+        toast.success(`${boardConfig.terminology.itemSingular} criado`, "Novo item criado com sucesso.");
       }
     } catch (error) {
-      toast.error("Falha ao salvar card", (error as Error)?.message ?? "Erro inesperado");
+      toast.error(`Falha ao salvar ${boardConfig.terminology.itemSingular}`, (error as Error)?.message ?? "Erro inesperado");
       throw error;
     }
   }
@@ -265,11 +276,15 @@ function KanbanEnginePageInner() {
   return (
     <div className="min-w-0 space-y-6 overflow-x-hidden p-4 sm:p-6">
       <PageHeader
-        title="Kanban"
+        title={selectedBoard?.name ?? "Kanban"}
         subtitle="Gerencie quadros, colunas e cards do Portal Vesper."
         actions={
           <>
             <BoardSelector boards={boards} value={selectedBoardId} onChange={handleSelectBoard} disabled={boardsQuery.isLoading || boards.length === 0} />
+            <PortalButton variant="secondary" onClick={() => setConfigOpen(true)} disabled={!selectedBoardId}>
+              <Settings className="h-4 w-4" />
+              Configuracoes do quadro
+            </PortalButton>
             <PortalButton
               onClick={() => openCreateCard()}
               disabled={!canCreate}
@@ -279,12 +294,12 @@ function KanbanEnginePageInner() {
                   : columns.length === 0
                     ? "Quadro sem colunas"
                     : !canCreatePerm
-                      ? "Sem permissão para criar card"
-                      : "Criar novo card"
+                      ? "Sem permissao para criar"
+                      : boardConfig.terminology.newItemLabel
               }
             >
               <Plus className="h-4 w-4" />
-              Novo card
+              {boardConfig.terminology.newItemLabel}
             </PortalButton>
           </>
         }
@@ -337,8 +352,8 @@ function KanbanEnginePageInner() {
         />
       ) : columns.length === 0 ? (
         <EmptyState
-          title="Este quadro ainda não possui colunas."
-          description="Crie colunas padrão ou adicione uma coluna manualmente para começar a organizar cards."
+          title="Este quadro ainda nao possui colunas."
+          description={`Crie colunas padrao ou adicione uma coluna manualmente para comecar a organizar ${boardConfig.terminology.itemPlural.toLowerCase()}.`}
           action={
             <>
               <PortalButton onClick={() => void createDefaultColumns()} disabled={createColumnMutation.isPending}>
@@ -360,6 +375,7 @@ function KanbanEnginePageInner() {
           onOpenCard={(id) => setDrawerCardId(id)}
           onCreateCard={(columnId) => openCreateCard(columnId)}
           onMoveCard={handleMoveCard}
+          config={boardConfig}
         />
       )}
 
@@ -368,6 +384,7 @@ function KanbanEnginePageInner() {
         cardId={drawerCardId}
         boardId={selectedBoardId ?? undefined}
         columns={columns}
+        config={boardConfig}
         onClose={() => setDrawerCardId(null)}
         onEdit={(id) => {
           setDrawerCardId(null);
@@ -383,7 +400,22 @@ function KanbanEnginePageInner() {
         columns={columns}
         initialColumnId={cardFormColumnId as UUID | undefined}
         editingCard={editingCard as KanbanCard | null}
+        config={boardConfig}
         onSubmit={handleSubmitCard}
+      />
+
+      <KanbanBoardConfigDrawer
+        open={configOpen}
+        board={selectedBoard}
+        config={boardConfig}
+        submitting={updateBoardConfigMutation.isPending}
+        error={updateBoardConfigMutation.error}
+        onClose={() => setConfigOpen(false)}
+        onSubmit={async (config) => {
+          await updateBoardConfigMutation.mutateAsync(config);
+          toast.success("Configuracao salva", "O quadro foi atualizado.");
+          setConfigOpen(false);
+        }}
       />
 
       {boardsQuery.isFetching || columnsQuery.isFetching || cardsQuery.isFetching ? (

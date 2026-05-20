@@ -8,6 +8,8 @@ import { useToast } from "../../shared/components/ToastProvider";
 import { getApiErrorMessage } from "../../shared/api/errors";
 import { usePortalWebSocketContext } from "../../shared/hooks/usePortalWebSocket";
 import { ErrorState, PortalSelect } from "../../shared/ui";
+import { listBoards } from "../kanban/api";
+import { DEFAULT_BOARD_CONFIG, normalizeBoardConfig } from "../kanban/config";
 import {
   createProductionChecklistItem,
   createProductionOrder,
@@ -32,6 +34,17 @@ import type {
   ProductionTVResponse,
 } from "./types";
 
+const PRODUCTION_TERMINOLOGY = {
+  ...DEFAULT_BOARD_CONFIG.terminology,
+  itemSingular: "OP",
+  itemPlural: "OPs",
+  newItemLabel: "Nova OP",
+  editItemLabel: "Editar OP",
+  itemTitleLabel: "Numero OP",
+  itemDescriptionLabel: "Observacoes",
+  emptyStateText: "Nenhuma OP encontrada.",
+};
+
 export function KanbanProducaoPage() {
   const queryClient = useQueryClient();
   const toast = useToast();
@@ -50,6 +63,28 @@ export function KanbanProducaoPage() {
     queryKey: productionQueryKeys.tvByMode(tvMode),
     queryFn: () => getProductionTVPreview(tvMode),
   });
+  const boardsQuery = useQuery({ queryKey: ["kanban", "boards", "production-config"], queryFn: () => listBoards() });
+  const productionBoard = useMemo(() => {
+    const boards = boardsQuery.data ?? [];
+    const defaults = boards.filter((board) => board.metadata?.systemKey === "kanban_producao" && board.metadata?.isDefaultProductionBoard === true);
+    if (defaults.length === 1) return defaults[0];
+    const system = boards.filter((board) => board.metadata?.systemKey === "kanban_producao");
+    if (system.length === 1) return system[0];
+    const fallback = boards.filter((board) => board.board_type === "production" && board.module_context === "producao");
+    return fallback.length === 1 ? fallback[0] : null;
+  }, [boardsQuery.data]);
+  const productionBoardConfig = normalizeBoardConfig(productionBoard);
+  const rawProductionConfig =
+    productionBoard?.metadata && typeof productionBoard.metadata === "object" && "config" in productionBoard.metadata
+      ? (productionBoard.metadata.config as Record<string, unknown> | undefined)
+      : undefined;
+  const rawTerminology =
+    rawProductionConfig && typeof rawProductionConfig === "object" && "terminology" in rawProductionConfig
+      ? (rawProductionConfig.terminology as Record<string, unknown> | undefined)
+      : undefined;
+  const hasCustomProductionTerminology =
+    Boolean(rawTerminology) && productionBoardConfig.terminology.newItemLabel !== DEFAULT_BOARD_CONFIG.terminology.newItemLabel;
+  const terminology = hasCustomProductionTerminology ? productionBoardConfig.terminology : PRODUCTION_TERMINOLOGY;
 
   const orders = ordersQuery.data ?? [];
   const selectedOrder = useMemo(
@@ -214,7 +249,7 @@ export function KanbanProducaoPage() {
             </span>
             <div className="min-w-0">
               <h1 className="text-2xl font-semibold text-white sm:text-3xl">Kanban Producao</h1>
-              <p className="mt-1 max-w-2xl text-sm text-slate-400">Controle simples de OPs com checklist editavel e preview TV/Foco.</p>
+              <p className="mt-1 max-w-2xl text-sm text-slate-400">Controle simples de {terminology.itemPlural} com checklist editavel e preview TV/Foco.</p>
             </div>
           </div>
         </div>
@@ -228,7 +263,7 @@ export function KanbanProducaoPage() {
           </Button>
           <Button onClick={() => setShowForm((value) => !value)}>
             <Plus className="h-4 w-4" />
-            Nova OP
+            {terminology.newItemLabel}
           </Button>
         </div>
       </header>
@@ -314,7 +349,7 @@ export function KanbanProducaoPage() {
                 </Button>
               </div>
             ) : orders.length === 0 ? (
-              <div className="p-4 text-sm text-slate-400">Nenhuma OP cadastrada.</div>
+                  <div className="p-4 text-sm text-slate-400">{terminology.emptyStateText}</div>
             ) : (
               orders.map((order) => (
                 <button

@@ -1,6 +1,5 @@
 import { useAuthStore } from "../auth/store";
-
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
+import { getRuntimeConfig } from "../config/runtimeConfig";
 
 type RequestOptions = RequestInit & {
   auth?: boolean;
@@ -32,7 +31,8 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     if (token) headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const url = `${API_BASE_URL}${path}`;
+  const apiBaseUrl = getRuntimeConfig().apiBaseUrl;
+  const url = `${apiBaseUrl}${path}`;
   const method = (options.method ?? "GET").toString().toUpperCase();
 
   if (import.meta.env.DEV) {
@@ -45,8 +45,9 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   try {
     response = await fetch(url, { ...options, headers });
   } catch (err) {
+    const apiBaseUrl = getRuntimeConfig().apiBaseUrl;
     const hint =
-      `Falha de rede/CORS. Verifique se o backend esta em ${API_BASE_URL} e se CORS_ORIGINS inclui ${window.location.origin}.`;
+      `Falha de rede/CORS. Verifique se o backend está em ${apiBaseUrl || window.location.origin} e se CORS_ORIGINS inclui ${window.location.origin}.`;
     throw new ApiRequestError(hint, { url, method });
   }
   if (response.status === 401 && options.auth !== false && requestOptions.retry) {
@@ -70,7 +71,8 @@ async function refreshAccessToken(): Promise<boolean> {
   const { refreshToken, user, setSession } = useAuthStore.getState();
   if (!refreshToken || !user) return false;
   try {
-    const response = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
+    const apiBaseUrl = getRuntimeConfig().apiBaseUrl;
+    const response = await fetch(`${apiBaseUrl}/api/auth/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refresh_token: refreshToken }),

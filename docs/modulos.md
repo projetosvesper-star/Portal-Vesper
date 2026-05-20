@@ -39,6 +39,17 @@ O **Kanban Engine** e o primeiro modulo com implementacao real no backend, proje
 
 Documentacao completa: `docs/kanban-engine.md`.
 
+### Kanban configuravel
+
+A Fase 1 do Kanban configuravel nao cria novos modulos. Ela adiciona configuracao por quadro dentro do proprio modulo Kanban:
+
+- `metadata.config` no board para terminologia, visual, features, campos customizados e TV/Foco;
+- `metadata.customFields` no card para valores dos campos dinamicos;
+- permissao `kanban.board.configure` para alterar configuracao;
+- validacao backend dos campos customizados.
+
+Isso permite que Projetos, TI, Compras, Comercial, Manutencao, Operacional e Personalizados tenham terminologia e campos proprios sem item separado na sidebar e sem tabelas novas nesta primeira fase.
+
 ### Hub Kanban
 
 A sidebar deve continuar exibindo apenas um item: `Kanban`.
@@ -55,6 +66,19 @@ Dentro de `/kanban`, o usuario acessa os contextos:
 Projetos, TI e Operacional nao sao modulos separados nesta fase. Eles sao quadros genericos do Kanban Engine, filtrados por `board_type` e `module_context`.
 
 A TV/Foco tambem e interna ao Kanban (`/kanban/tv`) e nao deve aparecer como item separado na sidebar. Ela usa o mesmo mecanismo de permissoes: quadros genericos dependem de `kanban.view`/`kanban.board.view`, e Producao depende de `kanban_producao.view`.
+
+### Contextos e templates configuraveis
+
+A Fase 2 do Kanban configuravel tambem nao cria modulos novos. O Hub Kanban passa a carregar contextos e templates pela API:
+
+- `kanban.context.view`
+- `kanban.context.manage`
+- `kanban.template.view`
+- `kanban.template.manage`
+
+Contextos controlam o que aparece dentro de `/kanban`: Quadros, Producao, Projetos, TI / Operacional, Personalizados, TV/Foco e contextos customizados. Contextos de sistema podem ser ocultados, mas nao removidos fisicamente.
+
+Templates controlam a criacao de quadros: tipo, contexto, colunas iniciais e `metadata.config`. Projetos, TI, Compras, Comercial, Manutencao e fluxos personalizados devem nascer como boards do Kanban Engine, nao como modulos separados.
 
 ## Kanban Producao
 

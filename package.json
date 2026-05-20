@@ -2,14 +2,21 @@
   "name": "portal-vesper",
   "version": "0.1.0",
   "private": true,
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "dev:web": "npm run dev --workspace=apps/web",
+    "dev:portal": "node scripts/dev-portal.mjs",
+    "dev:portal:clean": "node scripts/dev-portal.mjs --clean",
     "dev:desktop": "npm run dev --workspace=apps/desktop",
     "build:web": "npm run build --workspace=apps/web",
     "build:desktop": "npm run build --workspace=apps/desktop",
     "lint": "npm run lint --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
+    "e2e": "npx playwright test --config=playwright.config.ts",
+    "smoke:api": "node scripts/smoke-kanban-api.mjs",
     "infra:up": "docker compose --env-file .env -f infra/docker-compose.yml up -d",
     "infra:down": "docker compose --env-file .env -f infra/docker-compose.yml down",
     "infra:logs": "docker compose --env-file .env -f infra/docker-compose.yml logs -f",
@@ -22,5 +29,8 @@
   "engines": {
     "node": ">=20.0.0",
     "npm": ">=10.0.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.60.0"
   }
 }

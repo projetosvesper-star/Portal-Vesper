@@ -1,4 +1,5 @@
 import { ApiRequestError } from "./client";
+import { getRuntimeConfig } from "../config/runtimeConfig";
 
 export type FormattedApiError = {
   message: string;
@@ -8,7 +9,7 @@ export type FormattedApiError = {
   method?: string;
 };
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "mesma origem do frontend";
+const apiBaseUrl = getRuntimeConfig().apiBaseUrl || "mesma origem do frontend";
 
 export function formatApiError(error: unknown, fallback = "Não foi possível carregar este recurso."): FormattedApiError {
   if (error instanceof ApiRequestError) {
@@ -17,7 +18,7 @@ export function formatApiError(error: unknown, fallback = "Não foi possível ca
           `Endpoint: ${error.url}`,
           `Status: HTTP ${error.status}`,
           `Base configurada: ${apiBaseUrl}`,
-          "Sugestão: reinicie o backend atual, confira VITE_API_BASE_URL, verifique /api/docs e confirme se a porta 8000 não está presa por um processo antigo.",
+          "Sugestão: reinicie o backend atual, confira VITE_API_BASE_URL ou runtime-config, verifique /api/docs e confirme se a porta do backend não está ocupada.",
         ]
       : undefined;
 
