@@ -15,6 +15,8 @@ import {
   updateContext,
   updateTemplate,
 } from "./api";
+import { FALLBACK_TEMPLATES } from "./hubConfig";
+import { useKanbanTemplates } from "./hooks";
 import { DEFAULT_BOARD_CONFIG } from "./config";
 import { kanbanQueryKeys } from "./queryKeys";
 import type { BoardType, KanbanBoardTemplate, KanbanHubContext } from "./types";
@@ -54,7 +56,12 @@ export function KanbanHubConfigDialog({ open, onClose, contexts, templates }: Pr
   const [editingTemplateKey, setEditingTemplateKey] = useState<string | null>(null);
   const [editingTemplateName, setEditingTemplateName] = useState("");
 
-  const activeTemplates = useMemo(() => templates.slice().sort((a, b) => a.order - b.order), [templates]);
+  // Usar query interna quando o dialog está aberto para refletir imediatamente
+  // qualquer mutação (duplicate, archive, create) sem depender do ciclo de re-render do pai.
+  const templatesQuery = useKanbanTemplates();
+  const liveTemplates = (templatesQuery.data && templatesQuery.data.length > 0 ? templatesQuery.data : templates.length > 0 ? templates : FALLBACK_TEMPLATES);
+
+  const activeTemplates = useMemo(() => liveTemplates.slice().sort((a, b) => a.order - b.order), [liveTemplates]);
   const orderedContexts = useMemo(() => contexts.slice().sort((a, b) => a.order - b.order), [contexts]);
 
   const invalidate = async () => {
@@ -68,6 +75,22 @@ export function KanbanHubConfigDialog({ open, onClose, contexts, templates }: Pr
   const actionMutation = useMutation({
     mutationFn: async (operation: () => Promise<unknown>) => operation(),
     onSuccess: invalidate,
+    onError: setError,
+  });
+
+  // Mutação especializada para duplicar template: injeta o resultado no cache
+  // imediatamente (sem aguardar refetch) para que a UI atualize na hora.
+  const duplicateMutation = useMutation({
+    mutationFn: (args: { templateKey: string; key: string; name: string }) =>
+      duplicateTemplate(args.templateKey, { key: args.key, name: args.name }),
+    onSuccess: (newTemplate) => {
+      // Injetar imediatamente no cache antes do refetch
+      queryClient.setQueryData<KanbanBoardTemplate[]>(
+        kanbanQueryKeys.templates(),
+        (old) => (old ? [...old, newTemplate] : [newTemplate]),
+      );
+      void invalidate();
+    },
     onError: setError,
   });
 
@@ -170,17 +193,18 @@ export function KanbanHubConfigDialog({ open, onClose, contexts, templates }: Pr
                       <p className="mt-1 text-xs text-slate-500">{context.key} · {context.kind} · ordem {context.order}</p>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <IconButton label={`Subir ${context.name}`} disabled={index === 0} onClick={() => moveContext(context, -1)} icon={<ArrowUp className="h-4 w-4" />} />
-                      <IconButton label={`Descer ${context.name}`} disabled={index === orderedContexts.length - 1} onClick={() => moveContext(context, 1)} icon={<ArrowDown className="h-4 w-4" />} />
+                      <IconButton label={`Subir ${context.name}`} disabled={index === 0 || actionMutation.isPending} onClick={() => moveContext(context, -1)} icon={<ArrowUp className="h-4 w-4" />} />
+                      <IconButton label={`Descer ${context.name}`} disabled={index === orderedContexts.length - 1 || actionMutation.isPending} onClick={() => moveContext(context, 1)} icon={<ArrowDown className="h-4 w-4" />} />
                       <PortalButton
                         variant="secondary"
+                        disabled={actionMutation.isPending}
                         onClick={() => run(() => updateContext(context.key, { visible: !context.visible }))}
                       >
                         {context.visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                         {context.visible ? `Ocultar ${context.name}` : `Reativar ${context.name}`}
                       </PortalButton>
                       {!context.isSystem ? (
-                        <PortalButton variant="danger" onClick={() => run(() => deleteContext(context.key))}>
+                        <PortalButton variant="danger" disabled={actionMutation.isPending} onClick={() => run(() => deleteContext(context.key))}>
                           <Trash2 className="h-4 w-4" />
                           Excluir
                         </PortalButton>
@@ -232,6 +256,7 @@ export function KanbanHubConfigDialog({ open, onClose, contexts, templates }: Pr
                     <div className="flex flex-wrap gap-2">
                       <PortalButton
                         variant="secondary"
+                        disabled={actionMutation.isPending}
                         onClick={() => {
                           setEditingTemplateKey(template.key);
                           setEditingTemplateName(template.name);
@@ -241,17 +266,24 @@ export function KanbanHubConfigDialog({ open, onClose, contexts, templates }: Pr
                       </PortalButton>
                       <PortalButton
                         variant="secondary"
-                        onClick={() => run(() => duplicateTemplate(template.key, { key: `${template.key}_copia_${Date.now()}`, name: `${template.name} copia` }))}
+                        disabled={actionMutation.isPending || duplicateMutation.isPending}
+                        onClick={() =>
+                          duplicateMutation.mutate({
+                            templateKey: template.key,
+                            key: `${template.key}_copia_${Date.now()}`,
+                            name: `${template.name} copia`,
+                          })
+                        }
                       >
                         <Copy className="h-4 w-4" />
                         Duplicar
                       </PortalButton>
                       {template.isActive ? (
-                        <PortalButton variant="secondary" onClick={() => run(() => deleteTemplate(template.key))}>
+                        <PortalButton variant="secondary" disabled={actionMutation.isPending} onClick={() => run(() => deleteTemplate(template.key))}>
                           Arquivar
                         </PortalButton>
                       ) : (
-                        <PortalButton variant="secondary" onClick={() => run(() => restoreTemplate(template.key))}>
+                        <PortalButton variant="secondary" disabled={actionMutation.isPending} onClick={() => run(() => restoreTemplate(template.key))}>
                           Restaurar
                         </PortalButton>
                       )}
