@@ -77,6 +77,16 @@ PERMISSIONS = [
     ("ia.chat", "Usar chat de IA", "ia"),
     ("automacoes_n8n.view", "Ver automacoes n8n", "automacoes_n8n"),
     ("automacoes_n8n.status.view", "Ver status n8n", "automacoes_n8n"),
+    ("automation.view", "Ver automacoes backend", "automacoes_n8n"),
+    ("automation.audit.view", "Ver auditoria", "automacoes_n8n"),
+    ("automation.errors.view", "Ver erros", "automacoes_n8n"),
+    ("automation.dead_letters.view", "Ver dead letters", "automacoes_n8n"),
+    ("automation.approvals.view", "Ver aprovações", "automacoes_n8n"),
+    ("automation.approvals.respond", "Responder aprovações", "automacoes_n8n"),
+    ("automation.war_room.view", "Ver War Room", "automacoes_n8n"),
+    ("automation.admin", "Administrar automacoes", "automacoes_n8n"),
+    ("ia.gateway.use", "Usar Gateway IA", "ia"),
+    ("ia.workflows.status.view", "Ver status de workflows IA", "ia"),
     ("system.notifications.view", "Ver notificacoes", None),
 ] + KANBAN_PERMISSION_DEFINITIONS + KANBAN_PRODUCAO_PERMISSION_DEFINITIONS
 
@@ -109,6 +119,9 @@ ROLE_PERMISSION_KEYS = {
         "helpdesk.ticket.view",
         "atalhos.view",
         "system.notifications.view",
+        "automation.approvals.view",
+        "automation.approvals.respond",
+        "automation.war_room.view",
         *GESTOR_PRODUCAO_PERMISSIONS,
     ],
     "producao": [
@@ -187,6 +200,7 @@ ROLE_PERMISSION_KEYS = {
         "helpdesk.view",
         "helpdesk.ticket.create",
         "system.notifications.view",
+        "ia.gateway.use",
         *USUARIO_PRODUCAO_PERMISSIONS,
     ],
 }

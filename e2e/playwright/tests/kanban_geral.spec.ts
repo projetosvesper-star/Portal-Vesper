@@ -103,12 +103,17 @@ test("smoke: Kanban configuravel fases 1 e 2", async ({ page, request }) => {
   await page.getByLabel("Colunas").fill("Entrada\nConferencia\nFechado");
   await page.getByRole("button", { name: /Criar template/i }).click();
   await expect(page.getByText(templateName).first()).toBeVisible();
-  const templateRow = page.locator("section").filter({ hasText: templateName }).filter({ has: page.getByRole("button", { name: /Duplicar/i }) }).first();
+  const templateRow = page.getByText(templateName, { exact: true }).locator("xpath=ancestor::section[1]");
   await templateRow.getByRole("button", { name: /Duplicar/i }).click();
-  await expect(page.getByText(`${templateName} copia`).first()).toBeVisible({ timeout: 15000 });
-  const duplicatedRow = page.locator("section").filter({ hasText: `${templateName} copia` }).filter({ has: page.getByRole("button", { name: /Arquivar/i }) }).first();
-  await duplicatedRow.getByRole("button", { name: /Arquivar/i }).click();
-  await expect(page.getByText(`${templateName} copia`).first()).toHaveCount(0);
+  const duplicatedTemplateName = `${templateName} copia`;
+  await expect(page.getByText(duplicatedTemplateName, { exact: true }).first()).toBeVisible({ timeout: 15000 });
+  await expect(async () => {
+    const duplicatedArchiveButton = page.getByText(duplicatedTemplateName, { exact: true }).locator("xpath=ancestor::section[1]").getByRole("button", { name: /Arquivar/i });
+    await expect(duplicatedArchiveButton).toBeVisible({ timeout: 5000 });
+    await duplicatedArchiveButton.click({ timeout: 5000 });
+  }).toPass({ timeout: 20000 });
+  await expect(page.getByText(duplicatedTemplateName, { exact: true })).toHaveCount(0);
+  await expect(page.getByText(/Falha ao configurar Kanban|HTTP 404|Failed to fetch/i)).toHaveCount(0);
 
   await page.getByLabel("Fechar").last().click();
   await expect(page.getByRole("button", { name: new RegExp(contextName) })).toBeVisible();

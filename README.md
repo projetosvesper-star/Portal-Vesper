@@ -235,6 +235,46 @@ Permissoes novas: `kanban.context.view`, `kanban.context.manage`, `kanban.templa
 
 Os dados da Fase 2 ficam em JSONB no board interno `__kanban_hub_config__`, sem criar modulo novo e sem adicionar itens extras na sidebar.
 
+## Automation Core e n8n
+
+O Portal Vesper possui integracao ponta a ponta com n8n:
+
+- `POST /api/ia/gateway` envia solicitacoes do Portal para o Gateway Supervisor do n8n;
+- `/api/automation/*` recebe auditoria, erros, aprovacoes e eventos;
+- Approval Center funciona como barreira humana para acoes sensiveis;
+- Error Audit registra falhas com redaction de segredos;
+- War Room base acompanha a malha de automacoes.
+
+Estado validado da malha n8n local:
+
+- 24 workflows encontrados;
+- 21 workflows ativos;
+- 12/12 workflows AI ativos;
+- 9 workflows core/legados preservados;
+- 3 workflows extras/teste mantidos inativos.
+
+Os workflows finais sanitizados ficam em:
+
+```text
+N8N/workflows/
+```
+
+A documentacao tecnica fica em:
+
+```text
+docs/automation_gateway.md
+docs/n8n/
+```
+
+Credenciais devem ser configuradas no n8n, nunca nos JSONs:
+
+- `OpenAI account`
+- `Google Gemini(PaLM) Api account`
+- `Ollama account`
+- `Slack account`
+
+Antes de usar em producao, mantenha a regra: compra final, proposta final, pagamento, reset de senha/acesso, exclusao, alteracao critica de OP/Kanban e temas INMETRO/CAPA exigem Approval Center ou revisao humana.
+
 ## Desenvolvimento adaptável
 
 Use o script adaptável para evitar dependência de portas fixas:

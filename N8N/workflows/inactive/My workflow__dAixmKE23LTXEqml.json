@@ -1,0 +1,84 @@
+{
+  "updatedAt": "2026-05-20T16:57:20.165Z",
+  "createdAt": "2026-05-20T16:37:40.597Z",
+  "id": "dAixmKE23LTXEqml",
+  "name": "My workflow",
+  "active": false,
+  "isArchived": true,
+  "nodes": [
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        0
+      ],
+      "id": "6da754a6-940c-47da-ad4b-32d228c02dfe",
+      "name": "When chat message received",
+      "webhookId": "c92eaa24-8df9-4103-9813-4ac57b5d05fb"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-oss:120b-cloud",
+          "mode": "list",
+          "cachedResultName": "gpt-oss:120b-cloud"
+        },
+        "messages": {
+          "values": [
+            {}
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.ollama",
+      "typeVersion": 1,
+      "position": [
+        208,
+        -160
+      ],
+      "id": "333f3a78-e816-4a06-af1c-9bd434641b77",
+      "name": "Message a model",
+      "credentials": {
+        "ollamaApi": {
+          "id": "xfSPqjPtUVpuUujp",
+          "name": "Ollama account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "When chat message received": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {},
+  "versionId": "4b2679c0-a882-4add-b462-e2c696c8e0e6",
+  "activeVersionId": null,
+  "triggerCount": 0,
+  "shared": [
+    {
+      "updatedAt": "2026-05-20T16:37:40.597Z",
+      "createdAt": "2026-05-20T16:37:40.597Z",
+      "role": "workflow:owner",
+      "workflowId": "dAixmKE23LTXEqml",
+      "projectId": "EAsbiZgK7ZQczIeO"
+    }
+  ],
+  "activeVersion": null,
+  "tags": []
+}

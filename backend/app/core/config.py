@@ -57,6 +57,15 @@ class Settings(BaseSettings):
     API_BASE_URL: str = "http://localhost:8000"
     WEB_BASE_URL: str = "http://localhost:5173"
 
+    # Automation Core (n8n Integration)
+    N8N_BASE_URL: str = "http://127.0.0.1:5678"
+    N8N_GATEWAY_WEBHOOK_PATH: str = "/webhook/vesper/core/gateway"
+    N8N_REQUEST_TIMEOUT_SECONDS: int = 60
+    N8N_RUNTIME_MODE: str = "PORTAL"
+    VESPER_PORTAL_API_KEY: str = "dev_portal_key_123"
+    N8N_HMAC_SECRET: str = ""
+    N8N_REQUIRE_HMAC: bool = False
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]

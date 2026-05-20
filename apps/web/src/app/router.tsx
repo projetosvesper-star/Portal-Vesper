@@ -12,6 +12,8 @@ import { KanbanProducaoPage } from "../modules/production/KanbanProducaoPage";
 import { KanbanHubPage } from "../modules/kanban/KanbanHubPage";
 import { KanbanBoardPage } from "../modules/kanban/KanbanBoardPage";
 import { KanbanTvPage } from "../modules/kanban/KanbanTvPage";
+import { ApprovalsPage } from "../modules/automacoes/pages/ApprovalsPage";
+import { WarRoomPage } from "../modules/automacoes/pages/WarRoomPage";
 
 const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
@@ -35,7 +37,9 @@ const router = createBrowserRouter([
           { path: "controle-ti", element: <ProtectedModuleRoute moduleKey="controle_ti"><PlaceholderPage title="Controle TI" description="Base para inventario e controle de ativos de tecnologia." /></ProtectedModuleRoute> },
           { path: "atalhos", element: <ProtectedModuleRoute moduleKey="atalhos"><PlaceholderPage title="Atalhos" description="Base para acesso rapido aos sistemas e documentos importantes." /></ProtectedModuleRoute> },
           { path: "ia", element: <ProtectedModuleRoute moduleKey="ia"><PlaceholderPage title="IA Interna" description="Base para assistentes internos e automacoes com modelos de linguagem." /></ProtectedModuleRoute> },
-          { path: "automacoes", element: <ProtectedModuleRoute moduleKey="automacoes_n8n"><PlaceholderPage title="Automacoes n8n" description="Base para monitoramento e operacao dos workflows n8n." /></ProtectedModuleRoute> },
+          { path: "automacoes", element: <ProtectedModuleRoute moduleKey="automacoes_n8n"><WarRoomPage /></ProtectedModuleRoute> },
+          { path: "automacoes/war-room", element: <ProtectedModuleRoute moduleKey="automacoes_n8n"><WarRoomPage /></ProtectedModuleRoute> },
+          { path: "automacoes/aprovacoes", element: <ProtectedModuleRoute moduleKey="automacoes_n8n"><ApprovalsPage /></ProtectedModuleRoute> },
           { path: "*", element: <NotFoundPage /> },
         ],
       },

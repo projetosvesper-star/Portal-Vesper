@@ -1,0 +1,67 @@
+{
+  "updatedAt": "2026-05-19T16:12:18.933Z",
+  "createdAt": "2026-05-19T15:21:27.528Z",
+  "id": "OBlIDpKf6oeiZZhD",
+  "name": "Conex�o Real - Antigravity Teste",
+  "active": false,
+  "isArchived": true,
+  "nodes": [
+    {
+      "id": "e0e2eb4b-14d2-430c-ab2f-0d944c68832a",
+      "name": "When clicking 'Execute workflow'",
+      "type": "n8n-nodes-base.manualTrigger",
+      "position": [
+        250,
+        240
+      ],
+      "parameters": {},
+      "typeVersion": 1
+    },
+    {
+      "id": "c0556f2f-1d89-408f-8eb4-972c2193b218",
+      "name": "Confirmar Conex�o",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        470,
+        240
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: { status: 'Conectado com sucesso!', autor: 'Antigravity Master Agent', timestamp: new Date().toISOString() } }];",
+        "language": "javaScript",
+        "mode": "runOnceForAllItems"
+      },
+      "typeVersion": 2
+    }
+  ],
+  "connections": {
+    "When clicking 'Execute workflow'": {
+      "main": [
+        {
+          "node": "Confirmar Conex�o",
+          "type": "main",
+          "index": 0
+        }
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": null,
+  "pinData": null,
+  "versionId": "b266326d-4823-408a-9265-ae4749605b02",
+  "activeVersionId": null,
+  "triggerCount": 0,
+  "shared": [
+    {
+      "updatedAt": "2026-05-19T15:21:27.528Z",
+      "createdAt": "2026-05-19T15:21:27.528Z",
+      "role": "workflow:owner",
+      "workflowId": "OBlIDpKf6oeiZZhD",
+      "projectId": "EAsbiZgK7ZQczIeO"
+    }
+  ],
+  "activeVersion": null,
+  "tags": []
+}

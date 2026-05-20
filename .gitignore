@@ -45,6 +45,8 @@ env/
 
 # Logs
 *.log
+logs/
+backend/logs/
 npm-debug.log*
 yarn-debug.log*
 pip-log.txt
@@ -61,6 +63,22 @@ Thumbs.db
 
 # Local tooling
 .kiro/backups/
+.local_cleanup_backup/
+_PROJECT_CLEANUP_BACKUP/
+
+# Local n8n/export artifacts
+N8N_BACKUP_BEFORE_*/
+N8N_AFTER_*/
+N8N_READY_TO_IMPORT/
+artifacts/archive/
+exports/tmp/
+*_credentials*.json
+*_credentials_index*.json
+*credentials*.json
+*.bak
+*.tmp
+*.dump
+*.sql
 
 # Coverage
 coverage/
@@ -78,6 +96,7 @@ apps/desktop/src-tauri/target/
 
 # MinIO local data
 infra/minio/data/
+.uploads/
 
 # Local runtime files
 uploads/

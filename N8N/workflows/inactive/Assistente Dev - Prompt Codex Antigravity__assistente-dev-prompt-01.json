@@ -1,0 +1,99 @@
+{
+  "updatedAt": "2026-05-19T16:12:33.036Z",
+  "createdAt": "2026-05-14T19:38:28.436Z",
+  "id": "assistente-dev-prompt-01",
+  "name": "Assistente Dev - Prompt Codex Antigravity",
+  "active": false,
+  "isArchived": true,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "assistente-dev",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "15b2787e-cf83-49a9-9d44-553d76790ec7",
+      "name": "Webhook - receber tarefa",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -560,
+        0
+      ],
+      "webhookId": "assistente-dev-webhook-01"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body || $json;\n\nconst tarefa = body.tarefa || body.prompt || body.texto || 'Criar ou ajustar uma automação no n8n com Docker.';\nconst contexto = body.contexto || 'PC local Windows com Docker Desktop, n8n self-hosted, Postgres, Redis, Worker, VS Code, Codex e Antigravity.';\n\nconst prompt = [\n  'Você é um agente sênior de automação, DevOps, n8n, Docker e desenvolvimento assistido por IA.',\n  '',\n  'OBJETIVO:',\n  tarefa,\n  '',\n  'CONTEXTO:',\n  contexto,\n  '',\n  'REGRAS:',\n  '1. Antes de alterar qualquer coisa, analise o cenário e explique o plano.',\n  '2. Priorize Docker Compose, dados persistentes, backup e rollback.',\n  '3. Gere comandos testáveis para PowerShell/WSL.',\n  '4. Nunca invente credenciais, tokens ou senhas.',\n  '5. Quando precisar de API key, use variável de ambiente ou peça ao usuário.',\n  '6. Para n8n, pense em nodes, credenciais, triggers, webhooks, tratamento de erro e logs.',\n  '7. Para Codex/Antigravity, entregue passos objetivos, arquivos a criar/editar e testes finais.',\n  '8. Ao final, entregue checklist de validação e como desfazer se algo quebrar.',\n  '',\n  'ENTREGA ESPERADA:',\n  '- Plano curto',\n  '- Arquivos/comandos',\n  '- Testes',\n  '- Possíveis riscos',\n  '- Próximo passo recomendado'\n].join(\"\\n\");\n\nreturn [\n  {\n    json: {\n      prompt,\n      recebido: body,\n      como_usar: 'Envie POST para http://localhost:5678/webhook/assistente-dev com JSON: {\"tarefa\":\"sua tarefa aqui\"}'\n    }\n  }\n];"
+      },
+      "id": "181f9d6b-3f6f-4ecb-ac10-3ee4f03829d7",
+      "name": "Montar prompt para IA",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -260,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{$json}}",
+        "options": {}
+      },
+      "id": "96ffbe88-0e8d-4c14-90eb-704ed7e9cdb9",
+      "name": "Responder",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        20,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook - receber tarefa": {
+      "main": [
+        [
+          {
+            "node": "Montar prompt para IA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar prompt para IA": {
+      "main": [
+        [
+          {
+            "node": "Responder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": null,
+  "pinData": {},
+  "versionId": "716818e9-6a37-4720-9254-1503390ee1b2",
+  "activeVersionId": null,
+  "triggerCount": 1,
+  "shared": [
+    {
+      "updatedAt": "2026-05-14T19:38:28.436Z",
+      "createdAt": "2026-05-14T19:38:28.436Z",
+      "role": "workflow:owner",
+      "workflowId": "assistente-dev-prompt-01",
+      "projectId": "EAsbiZgK7ZQczIeO"
+    }
+  ],
+  "activeVersion": null,
+  "tags": []
+}

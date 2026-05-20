@@ -20,6 +20,8 @@ from app.modules.notifications.router import router as notifications_router
 from app.modules.portal.router import router as portal_router
 from app.modules.production.router import router as production_router
 from app.modules.users.router import router as users_router
+from app.modules.automation.router import router as automation_router
+from app.modules.automation.router import ia_router
 
 settings = get_settings()
 logger = structlog.get_logger(__name__)
@@ -105,4 +107,6 @@ app.include_router(files_router, prefix="/api")
 app.include_router(kanban_router, prefix="/api")
 app.include_router(production_router, prefix="/api")
 app.include_router(users_router, prefix="/api")
+app.include_router(automation_router)
+app.include_router(ia_router)
 app.add_api_websocket_route("/ws", websocket_endpoint)
